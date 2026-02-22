@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英文戰鬥學院 ⚔️ English Battle Academy</title>
+    <meta name="description" content="Roblox 風格英文學習遊戲 - 單字戰鬥、文法挑戰、升等冒險！">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- Tesseract.js for OCR -->
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+
+<body>
+
+    <!-- ========== 遊戲 HUD 導覽列 ========== -->
+    <nav class="game-hud">
+        <div class="hud-inner">
+            <!-- 左：角色等級 -->
+            <div class="hud-left" onclick="app.navigate('home')">
+                <div class="hud-avatar" id="level-icon">🔫</div>
+                <div class="hud-level-info">
+                    <span class="hud-level-badge" id="level-num">Lv.1</span>
+                    <span class="hud-title" id="level-title">新兵</span>
+                </div>
+            </div>
+
+            <!-- 中：經驗條 -->
+            <div class="hud-center">
+                <div class="xp-label" id="xp-text">0 / 50 XP</div>
+                <div class="xp-bar-container">
+                    <div class="xp-bar-fill" id="xp-bar" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- 右：Combo & 設定 -->
+            <div class="hud-right">
+                <div class="combo-display" id="combo-count"></div>
+                <div class="hud-stats">
+                    <span>⭐</span>
+                    <span id="star-count">0</span>
+                </div>
+                <button class="hud-settings"
+                    onclick="document.getElementById('settings-modal').classList.remove('hidden')"
+                    title="設定">⚙️</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ========== 設定模態框 ========== -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3>⚙️ 系統設定</h3>
+            <div>
+                <label class="modal-label">Google Apps Script 網址</label>
+                <input type="text" id="api-url-input" class="modal-input"
+                    placeholder="https://script.google.com/macros/s/...">
+                <p class="modal-hint">貼上部署的 Web App URL 以啟用雲端儲存。</p>
+            </div>
+            <div class="modal-actions">
+                <button onclick="document.getElementById('settings-modal').classList.add('hidden')"
+                    class="modal-cancel-btn">取消</button>
+                <button onclick="app.saveSettings()" class="modal-save-btn">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 編輯模態框 ========== -->
+    <div id="edit-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3>✏️ 編輯題目</h3>
+            <input type="hidden" id="edit-id">
+            <input type="hidden" id="edit-type">
+            <label class="modal-label">單元</label>
+            <input type="text" id="edit-unit" class="modal-input" placeholder="例如：Unit 1">
+            <label class="modal-label">單字（英文）</label>
+            <input type="text" id="edit-word" class="modal-input" placeholder="例如：apple">
+            <label class="modal-label">中文翻譯</label>
+            <input type="text" id="edit-chinese" class="modal-input" placeholder="例如：蘋果">
+            <label class="modal-label">題目內容</label>
+            <input type="text" id="edit-question" class="modal-input" placeholder="輸入題目">
+            <div class="modal-actions">
+                <button onclick="document.getElementById('edit-modal').classList.add('hidden')"
+                    class="modal-cancel-btn">取消</button>
+                <button onclick="app.saveEdit()" class="modal-save-btn">儲存修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 新增單字模態框 ========== -->
+    <div id="add-vocab-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3>➕ 新增單字</h3>
+            <label class="modal-label">英文單字</label>
+            <input type="text" id="add-vocab-word" class="modal-input" placeholder="例如：apple">
+            <label class="modal-label">中文翻譯</label>
+            <input type="text" id="add-vocab-chinese" class="modal-input" placeholder="例如：蘋果">
+            <label class="modal-label">單元</label>
+            <input type="text" id="add-vocab-unit" class="modal-input" placeholder="例如：Unit 1">
+            <div class="modal-actions">
+                <button onclick="document.getElementById('add-vocab-modal').classList.add('hidden')"
+                    class="modal-cancel-btn">取消</button>
+                <button onclick="app.addNewVocab()" class="modal-save-btn">新增</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 新增文法模態框 ========== -->
+    <div id="add-grammar-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3>➕ 新增文法題</h3>
+            <label class="modal-label">題目</label>
+            <input type="text" id="add-grammar-question" class="modal-input" placeholder="She _____ a student.">
+            <label class="modal-label">正確答案</label>
+            <input type="text" id="add-grammar-answer" class="modal-input" placeholder="is">
+            <label class="modal-label">解說</label>
+            <input type="text" id="add-grammar-explanation" class="modal-input" placeholder="主詞 She 用 is">
+            <label class="modal-label">單元</label>
+            <input type="text" id="add-grammar-unit" class="modal-input" placeholder="例如：Unit 1">
+            <div class="modal-actions">
+                <button onclick="document.getElementById('add-grammar-modal').classList.add('hidden')"
+                    class="modal-cancel-btn">取消</button>
+                <button onclick="app.addNewGrammar()" class="modal-save-btn">新增</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 主要內容區 ========== -->
+    <main id="app-container" class="main-container">
+        <!-- Views 由 JavaScript 動態注入 -->
+    </main>
+
+    <!-- ========== Templates ========== -->
+
+    <!-- 首頁 - 任務大廳 -->
+    <template id="tpl-home">
+        <div class="mission-lobby animate-fade-in">
+            <!-- 玩家卡片 -->
+            <div class="player-card">
+                <div class="player-avatar-big" id="home-avatar">🔫</div>
+                <div class="player-info">
+                    <h3 id="home-player-title">🔫 新兵</h3>
+                    <div id="home-player-level" class="player-level-text">Lv.1</div>
+                    <div class="player-stats-row">
+                        <div class="player-stat">答對 <strong id="home-correct">0</strong></div>
+                        <div class="player-stat">答錯 <strong id="home-wrong" class="text-pink">0</strong></div>
+                        <div class="player-stat">最高連擊 <strong id="home-combo" class="text-orange">0</strong></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 每日進度 -->
+            <div class="daily-progress-card">
+                <div class="daily-progress-header">
+                    <span>🎯 每日任務</span>
+                    <span id="daily-text">今日 0 / 100 XP</span>
+                </div>
+                <div class="daily-bar-container">
+                    <div class="daily-bar-fill" id="daily-bar"></div>
+                </div>
+            </div>
+
+            <!-- 大廳標題 -->
+            <div class="lobby-header">
+                <h2>⚔️ 選擇任務</h2>
+                <p>選一個戰場，開始你的英文冒險！</p>
+            </div>
+
+            <!-- 任務卡片 -->
+            <div class="mission-grid">
+                <!-- 單字任務 -->
+                <div class="mission-card vocab-card" onclick="app.navigate('vocabulary')">
+                    <button class="mission-list-btn" onclick="event.stopPropagation(); app.navigate('vocab-list')"
+                        title="查看總表">📋</button>
+                    <span class="mission-icon">🎯</span>
+                    <h3 class="mission-title">單字戰鬥</h3>
+                    <p class="mission-desc">記住單字、拼出正確答案，答錯的會進入「錯題本」等你來挑戰！</p>
+                    <span class="mission-btn">開始戰鬥 →</span>
+                </div>
+
+                <!-- 文法任務 -->
+                <div class="mission-card grammar-card" onclick="app.navigate('grammar')">
+                    <button class="mission-list-btn" onclick="event.stopPropagation(); app.navigate('grammar-list')"
+                        title="查看總表">📋</button>
+                    <span class="mission-icon">⚔️</span>
+                    <h3 class="mission-title">文法特訓</h3>
+                    <p class="mission-desc">選擇題 & 填空題，答錯有詳細解說幫你搞懂！</p>
+                    <span class="mission-btn">開始挑戰 →</span>
+                </div>
+
+                <!-- 智慧匯入 -->
+                <div class="mission-card import-card" onclick="app.navigate('import')">
+                    <span class="mission-icon">📝</span>
+                    <h3 class="mission-title">匯入單字表</h3>
+                    <p class="mission-desc">貼上課本單字表，自動解析英文和中文！</p>
+                    <span class="mission-btn">匯入單字 →</span>
+                </div>
+
+                <!-- 錯題本 -->
+                <div class="mission-card mistake-card" onclick="app.navigate('mistakes')">
+                    <span class="mission-icon">📖</span>
+                    <h3 class="mission-title">錯題本</h3>
+                    <p class="mission-desc">重練答錯的題目，征服你的弱點！</p>
+                    <span class="mission-btn">查看錯題 →</span>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- 單字練習 -->
+    <template id="tpl-vocabulary">
+        <div class="w-full max-w-2xl mx-auto animate-slide-up">
+            <div class="view-header">
+                <button onclick="app.navigate('home')" class="back-btn">⬅ 回基地</button>
+                <div class="view-mode-label mode-vocab">🎯 單字戰鬥</div>
+            </div>
+
+            <!-- 模式切換 -->
+            <div class="mode-tabs">
+                <button class="mode-tab active" id="tab-choice"
+                    onclick="vocabularyModule.setMode('choice')">選擇題</button>
+                <button class="mode-tab" id="tab-spell" onclick="vocabularyModule.setMode('spell')">拼寫挑戰</button>
+            </div>
+
+            <div id="vocab-game-area" class="game-area">
+                <!-- 進度條 -->
+                <div class="progress-track">
+                    <div id="vocab-progress" class="progress-fill"></div>
+                </div>
+                <!-- 題目容器 -->
+                <div id="vocab-question-container">
+                    <!-- 動態內容 -->
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- 文法練習 -->
+    <template id="tpl-grammar">
+        <div class="w-full max-w-2xl mx-auto animate-slide-up">
+            <div class="view-header">
+                <button onclick="app.navigate('home')" class="back-btn">⬅ 回基地</button>
+                <div class="view-mode-label mode-grammar">⚔️ 文法特訓</div>
+            </div>
+
+            <!-- 模式切換 -->
+            <div class="mode-tabs">
+                <button class="mode-tab active" id="tab-grammar-choice"
+                    onclick="grammarModule.setMode('choice')">選擇題</button>
+                <button class="mode-tab" id="tab-grammar-fill" onclick="grammarModule.setMode('fill')">填空題</button>
+            </div>
+
+            <div id="grammar-game-area" class="game-area">
+                <div id="grammar-question-container">
+                    <!-- 動態內容 -->
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- 智慧匯入 -->
+    <template id="tpl-import">
+        <div class="w-full max-w-3xl mx-auto animate-slide-up">
+            <div class="view-header">
+                <button onclick="app.navigate('home')" class="back-btn">⬅ 回基地</button>
+                <div class="view-mode-label mode-import">📝 匯入單字表</div>
+            </div>
+
+            <!-- 模式切換 -->
+            <div class="mode-tabs">
+                <button class="mode-tab active" id="import-tab-paste" onclick="importerModule.switchTab('paste')">📝
+                    手動輸入</button>
+                <button class="mode-tab" id="import-tab-ocr" onclick="importerModule.switchTab('ocr')">📷 圖片辨識</button>
+            </div>
+
+            <div class="game-area">
+                <!-- 手動貼上面板 -->
+                <div id="paste-panel">
+                    <div class="import-help-box">
+                        <h4>📋 使用方式</h4>
+                        <p>從課本、講義或 PDF 把單字表<strong>複製貼上</strong>到下方文字框，系統會自動解析英文和中文！</p>
+                        <div class="import-format-examples">
+                            <div class="format-example"><span class="format-tag">格式 1</span><code>1. life 生活</code>
+                            </div>
+                            <div class="format-example"><span class="format-tag">格式 2</span><code>apple 蘋果</code></div>
+                            <div class="format-example"><span class="format-tag">格式 3</span><code>cat - 貓</code></div>
+                            <div class="format-example"><span class="format-tag">格式 4</span><code>hello（你好）</code></div>
+                        </div>
+                    </div>
+
+                    <textarea id="paste-input" class="ocr-textarea" rows="12"
+                        placeholder="在這裡貼上你的單字表...&#10;&#10;範例：&#10;1. life 生活、生命&#10;2. electric light 電燈&#10;3. cell phone 手機&#10;4. begin 開始&#10;5. modern 現代的"></textarea>
+
+                    <div class="import-controls">
+                        <input type="text" id="import-unit-input" class="import-input" placeholder="單元 (例如：Unit 3)">
+                        <button class="import-btn" onclick="importerModule.parseFromPaste()">🧠 智慧解析</button>
+                    </div>
+
+                    <div id="questions-preview" class="hidden" style="margin-top:20px;">
+                        <h4 class="preview-title">📋 解析結果（可編輯英文和中文）</h4>
+                        <div id="questions-preview-list"></div>
+                        <button class="import-btn import-btn-full" onclick="importerModule.saveQuestions()">✅
+                            確認匯入到單字庫</button>
+                    </div>
+                </div>
+
+                <!-- OCR 面板 -->
+                <div id="ocr-panel" class="hidden">
+                    <div class="import-help-box ocr-warning-box">
+                        <h4>⚠️ OCR 使用提示</h4>
+                        <p>OCR 對中文辨識效果有限，建議使用「手動輸入」。辨識後文字會轉到手動輸入框供修正。</p>
+                    </div>
+                    <div id="upload-area" class="upload-zone" onclick="document.getElementById('file-input').click()">
+                        <span class="upload-icon">📂</span>
+                        <h3>點擊上傳圖片</h3>
+                        <p>支援 .jpg, .png</p>
+                        <input type="file" id="file-input" class="hidden" accept="image/*"
+                            onchange="importerModule.handleFileSelect(this)">
+                    </div>
+                    <div id="processing-area" class="hidden processing-center">
+                        <div class="processing-spinner">⚙️</div>
+                        <p class="processing-title">正在辨識中...</p>
+                        <p class="processing-status" id="process-status">初始化...</p>
+                        <div id="ocr-logs" class="ocr-log-box"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- 錯題本 -->
+    <template id="tpl-mistakes">
+        <div class="w-full max-w-2xl mx-auto animate-slide-up">
+            <div class="view-header">
+                <button onclick="app.navigate('home')" class="back-btn">⬅ 回基地</button>
+                <div class="view-mode-label mode-mistakes">📖 錯題本</div>
+            </div>
+
+            <!-- 模式切換 -->
+            <div class="mode-tabs">
+                <button class="mode-tab active" id="tab-mistake-vocab" onclick="app.showMistakes('vocabulary')">📚
+                    單字錯題</button>
+                <button class="mode-tab" id="tab-mistake-grammar" onclick="app.showMistakes('grammar')">✍️ 文法錯題</button>
+            </div>
+
+            <div class="game-area">
+                <div id="mistakes-container">
+                    <!-- 動態內容 -->
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- 單字總表 -->
+    <template id="tpl-vocab-list">
+        <div class="w-full max-w-3xl mx-auto animate-slide-up">
+            <div class="view-header">
+                <button onclick="app.navigate('home')" class="back-btn">⬅ 回基地</button>
+                <div class="view-mode-label mode-vocab">📋 單字總表</div>
+                <button class="add-btn"
+                    onclick="document.getElementById('add-vocab-modal').classList.remove('hidden')">➕ 新增</button>
+            </div>
+            <div class="game-area list-area">
+                <div id="vocab-empty-state" class="empty-state hidden">
+                    <span class="empty-icon">📭</span>
+                    <p>還沒有單字，快去匯入或練習吧！</p>
+                </div>
+                <table class="list-table">
+                    <thead>
+                        <tr>
+                            <th>單元</th>
+                            <th>單字</th>
+                            <th>中文</th>
+                            <th>🔊</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vocab-list-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </template>
+
+    <!-- 文法總表 -->
+    <template id="tpl-grammar-list">
+        <div class="w-full max-w-3xl mx-auto animate-slide-up">
+            <div class="view-header">
+                <button onclick="app.navigate('home')" class="back-btn">⬅ 回基地</button>
+                <div class="view-mode-label mode-grammar">📋 文法總表</div>
+                <button class="add-btn"
+                    onclick="document.getElementById('add-grammar-modal').classList.remove('hidden')">➕ 新增</button>
+            </div>
+            <div class="game-area list-area">
+                <div id="grammar-empty-state" class="empty-state hidden">
+                    <span class="empty-icon">📭</span>
+                    <p>還沒有文法題目，快去匯入或練習吧！</p>
+                </div>
+                <table class="list-table">
+                    <thead>
+                        <tr>
+                            <th>單元</th>
+                            <th>題目</th>
+                            <th>答案</th>
+                            <th>解說</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="grammar-list-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </template>
+
+    <!-- ========== Scripts ========== -->
+    <script src="data/mockData.js"></script>
+    <script src="modules/storage.js"></script>
+    <script src="modules/gameSystem.js"></script>
+    <script src="modules/vocabulary.js"></script>
+    <script src="modules/grammar.js"></script>
+    <script src="modules/importer.js"></script>
+    <script src="app.js"></script>
+
+</body>
+
+</html>

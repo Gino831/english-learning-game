@@ -1,0 +1,1768 @@
+/* ============================================
+   英文戰鬥學院 - Roblox FPS 遊戲風格主題
+   ============================================ */
+
+/* --- CSS 變數 --- */
+:root {
+    --bg-dark: #0f0f1a;
+    --bg-card: #1a1a2e;
+    --bg-card-hover: #222240;
+    --bg-surface: #16213e;
+    --neon-green: #00ff88;
+    --neon-blue: #00d4ff;
+    --neon-purple: #b44aff;
+    --neon-pink: #ff2d95;
+    --neon-yellow: #ffdd00;
+    --neon-orange: #ff8800;
+    --text-primary: #e8e8f0;
+    --text-secondary: #8888aa;
+    --text-dim: #555577;
+    --border-glow: rgba(0, 212, 255, 0.3);
+    --shadow-neon: 0 0 20px rgba(0, 212, 255, 0.15);
+    --font-game: 'Fredoka', 'Segoe UI', sans-serif;
+}
+
+/* --- 全域基礎 --- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: var(--bg-dark);
+    background-image:
+        radial-gradient(ellipse at 20% 50%, rgba(0, 212, 255, 0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(180, 74, 255, 0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 80%, rgba(0, 255, 136, 0.03) 0%, transparent 50%);
+    font-family: var(--font-game);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* --- 遊戲 HUD 頂部導覽 --- */
+.game-hud {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    z-index: 50;
+    background: linear-gradient(180deg, rgba(15, 15, 26, 0.95) 0%, rgba(15, 15, 26, 0.85) 100%);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-glow);
+    padding: 8px 16px;
+    box-shadow: var(--shadow-neon);
+}
+
+.hud-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.hud-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.hud-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: linear-gradient(135deg, var(--bg-card), var(--bg-surface));
+    border: 2px solid var(--neon-blue);
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+    transition: transform 0.2s;
+}
+
+.hud-avatar:hover {
+    transform: scale(1.1);
+}
+
+.hud-level-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.hud-level-badge {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--neon-blue);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.hud-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+/* XP 經驗條 */
+.hud-center {
+    flex: 1;
+    max-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.xp-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    text-align: center;
+    font-weight: 600;
+}
+
+.xp-bar-container {
+    height: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 5px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.xp-bar-fill {
+    height: 100%;
+    border-radius: 5px;
+    background: linear-gradient(90deg, var(--neon-blue), var(--neon-green));
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.xp-bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent);
+    border-radius: 5px 5px 0 0;
+}
+
+/* HUD 右側 */
+.hud-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.combo-display {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--neon-yellow);
+    min-width: 60px;
+    text-align: center;
+    transition: all 0.3s;
+}
+
+.combo-hot {
+    color: var(--neon-orange);
+    animation: comboPulse 0.5s ease;
+}
+
+.combo-fire {
+    color: var(--neon-pink);
+    animation: comboPulse 0.5s ease;
+    text-shadow: 0 0 10px rgba(255, 45, 149, 0.5);
+}
+
+@keyframes comboPulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.4);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.hud-stats {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 5px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hud-stats span {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--neon-yellow);
+}
+
+.hud-settings {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    transition: color 0.2s;
+}
+
+.hud-settings:hover {
+    color: var(--neon-blue);
+}
+
+/* --- 主要內容區 --- */
+.main-container {
+    padding-top: 72px;
+    padding-bottom: 24px;
+    padding-left: 16px;
+    padding-right: 16px;
+    max-width: 900px;
+    margin: 0 auto;
+    min-height: 100vh;
+}
+
+/* --- 首頁 - 任務選擇大廳 --- */
+.mission-lobby {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding-top: 20px;
+}
+
+.lobby-header {
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.lobby-header h2 {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--neon-blue), var(--neon-green));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+}
+
+.lobby-header p {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* 每日進度條 */
+.daily-progress-card {
+    width: 100%;
+    max-width: 500px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-glow);
+    border-radius: 16px;
+    padding: 16px 20px;
+    box-shadow: var(--shadow-neon);
+}
+
+.daily-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.daily-progress-header span:first-child {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--neon-yellow);
+}
+
+.daily-progress-header span:last-child {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.daily-bar-container {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.daily-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--neon-yellow), var(--neon-orange));
+    border-radius: 4px;
+    transition: width 0.5s ease;
+    width: 0%;
+}
+
+/* 任務卡片 */
+.mission-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    width: 100%;
+}
+
+.mission-card {
+    background: var(--bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.mission-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+    transition: height 0.3s;
+}
+
+.mission-card.vocab-card::before {
+    background: linear-gradient(90deg, var(--neon-blue), var(--neon-green));
+}
+
+.mission-card.grammar-card::before {
+    background: linear-gradient(90deg, var(--neon-purple), var(--neon-pink));
+}
+
+.mission-card.import-card::before {
+    background: linear-gradient(90deg, var(--neon-orange), var(--neon-yellow));
+}
+
+.mission-card.mistake-card::before {
+    background: linear-gradient(90deg, var(--neon-pink), var(--neon-orange));
+}
+
+.mission-card:hover {
+    transform: translateY(-6px);
+    border-color: var(--border-glow);
+    box-shadow: var(--shadow-neon);
+}
+
+.mission-card:hover::before {
+    height: 4px;
+}
+
+.mission-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    display: block;
+    transition: transform 0.3s;
+}
+
+.mission-card:hover .mission-icon {
+    transform: scale(1.15);
+}
+
+.mission-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.vocab-card .mission-title {
+    color: var(--neon-blue);
+}
+
+.grammar-card .mission-title {
+    color: var(--neon-purple);
+}
+
+.import-card .mission-title {
+    color: var(--neon-orange);
+}
+
+.mistake-card .mission-title {
+    color: var(--neon-pink);
+}
+
+.mission-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 14px;
+}
+
+.mission-btn {
+    display: inline-block;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.vocab-card .mission-btn {
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--neon-blue);
+}
+
+.grammar-card .mission-btn {
+    background: rgba(180, 74, 255, 0.15);
+    color: var(--neon-purple);
+}
+
+.import-card .mission-btn {
+    background: rgba(255, 136, 0, 0.15);
+    color: var(--neon-orange);
+}
+
+.mistake-card .mission-btn {
+    background: rgba(255, 45, 149, 0.15);
+    color: var(--neon-pink);
+}
+
+.mission-card:hover .mission-btn {
+    filter: brightness(1.2);
+}
+
+.mission-list-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--text-dim);
+    transition: color 0.2s;
+}
+
+.mission-list-btn:hover {
+    color: var(--neon-blue);
+}
+
+/* 角色資訊面板 */
+.player-card {
+    width: 100%;
+    max-width: 500px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-glow);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: var(--shadow-neon);
+}
+
+.player-avatar-big {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    background: linear-gradient(135deg, var(--bg-surface), var(--bg-dark));
+    border: 2px solid var(--neon-blue);
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+    flex-shrink: 0;
+}
+
+.player-info {
+    flex: 1;
+}
+
+.player-info h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.player-stats-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+}
+
+.player-stat {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.player-stat strong {
+    color: var(--neon-green);
+}
+
+/* --- 返回 & 模式標題列 --- */
+.view-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.back-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.2s;
+    font-family: var(--font-game);
+}
+
+.back-btn:hover {
+    color: var(--neon-blue);
+}
+
+.view-mode-label {
+    font-size: 14px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 10px;
+}
+
+.mode-vocab {
+    color: var(--neon-blue);
+    background: rgba(0, 212, 255, 0.1);
+}
+
+.mode-grammar {
+    color: var(--neon-purple);
+    background: rgba(180, 74, 255, 0.1);
+}
+
+.mode-import {
+    color: var(--neon-orange);
+    background: rgba(255, 136, 0, 0.1);
+}
+
+.mode-mistakes {
+    color: var(--neon-pink);
+    background: rgba(255, 45, 149, 0.1);
+}
+
+/* --- 遊戲區域卡片 --- */
+.game-area {
+    background: var(--bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    padding: 32px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* 進度條 */
+.progress-track {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 3px;
+    margin-bottom: 28px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--neon-blue), var(--neon-green));
+    border-radius: 3px;
+    transition: width 0.5s ease;
+    width: 0%;
+}
+
+/* --- 單字卡 --- */
+.vocab-card-display {
+    text-align: center;
+}
+
+.vocab-image {
+    font-size: 64px;
+    margin-bottom: 8px;
+    display: block;
+    animation: floatBounce 3s ease-in-out infinite;
+}
+
+@keyframes floatBounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
+.vocab-word {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.vocab-chinese {
+    font-size: 16px;
+    color: var(--neon-green);
+    margin-bottom: 4px;
+}
+
+.speak-btn {
+    background: rgba(0, 212, 255, 0.1);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    color: var(--neon-blue);
+    font-size: 22px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.speak-btn:hover {
+    background: rgba(0, 212, 255, 0.2);
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+}
+
+.vocab-question {
+    font-size: 16px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+/* 拼寫輸入框 */
+.spell-input-area {
+    margin: 20px auto;
+    max-width: 360px;
+}
+
+.spell-input {
+    width: 100%;
+    padding: 14px 18px;
+    font-size: 20px;
+    font-family: var(--font-game);
+    text-align: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.3s;
+    letter-spacing: 3px;
+}
+
+.spell-input:focus {
+    border-color: var(--neon-blue);
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.2);
+}
+
+.spell-input.correct {
+    border-color: var(--neon-green);
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+}
+
+.spell-input.wrong {
+    border-color: var(--neon-pink);
+    box-shadow: 0 0 15px rgba(255, 45, 149, 0.3);
+}
+
+.submit-spell-btn {
+    margin-top: 12px;
+    padding: 10px 32px;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: var(--font-game);
+    background: linear-gradient(135deg, var(--neon-blue), var(--neon-green));
+    color: var(--bg-dark);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.submit-spell-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+.submit-spell-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- 選項按鈕 --- */
+.options-grid {
+    display: grid;
+    gap: 10px;
+    max-width: 450px;
+    margin: 0 auto;
+}
+
+.option-btn {
+    width: 100%;
+    text-align: left;
+    padding: 14px 18px;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 500;
+    font-family: var(--font-game);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.option-btn:hover {
+    border-color: var(--neon-blue);
+    background: rgba(0, 212, 255, 0.08);
+}
+
+.option-btn.correct {
+    border-color: var(--neon-green) !important;
+    background: rgba(0, 255, 136, 0.1) !important;
+    color: var(--neon-green) !important;
+}
+
+.option-btn.wrong {
+    border-color: var(--neon-pink) !important;
+    background: rgba(255, 45, 149, 0.1) !important;
+    color: var(--neon-pink) !important;
+}
+
+.option-btn.correct::after {
+    content: '✓';
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--neon-green);
+}
+
+.option-btn.wrong::after {
+    content: '✕';
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--neon-pink);
+}
+
+/* --- 文法說明框 --- */
+.explanation-box {
+    background: rgba(255, 221, 0, 0.06);
+    border-left: 4px solid var(--neon-yellow);
+    border-radius: 0 12px 12px 0;
+    padding: 16px 20px;
+    margin-top: 16px;
+    text-align: left;
+}
+
+.explanation-box h4 {
+    color: var(--neon-yellow);
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.explanation-box p {
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.8;
+    white-space: pre-line;
+}
+
+.next-btn {
+    margin-top: 16px;
+    width: 100%;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: var(--font-game);
+    background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+    color: white;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.next-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 15px rgba(180, 74, 255, 0.3);
+}
+
+/* --- 填空模式 --- */
+.fill-blank-input {
+    display: inline-block;
+    width: 120px;
+    padding: 6px 12px;
+    font-size: 18px;
+    font-family: var(--font-game);
+    text-align: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px dashed var(--neon-purple);
+    border-radius: 8px;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.fill-blank-input:focus {
+    border-color: var(--neon-blue);
+}
+
+/* --- 匯入頁面 --- */
+.upload-zone {
+    border: 3px dashed rgba(255, 136, 0, 0.3);
+    border-radius: 20px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.upload-zone:hover {
+    border-color: var(--neon-orange);
+    background: rgba(255, 136, 0, 0.05);
+}
+
+.upload-zone .upload-icon {
+    font-size: 56px;
+    margin-bottom: 12px;
+    display: block;
+}
+
+.upload-zone h3 {
+    color: var(--neon-orange);
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.upload-zone p {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+/* 匯入分類選擇 */
+.import-controls {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+.import-input {
+    flex: 1;
+    min-width: 120px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: var(--font-game);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: var(--text-primary);
+    outline: none;
+}
+
+.import-input:focus {
+    border-color: var(--neon-orange);
+}
+
+.import-select {
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: var(--font-game);
+    background: var(--bg-surface);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: var(--text-primary);
+    outline: none;
+    cursor: pointer;
+}
+
+.import-btn {
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: var(--font-game);
+    background: linear-gradient(135deg, var(--neon-orange), var(--neon-yellow));
+    color: var(--bg-dark);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.import-btn:hover {
+    transform: scale(1.03);
+    box-shadow: 0 0 15px rgba(255, 136, 0, 0.3);
+}
+
+/* 處理中動畫 */
+.processing-spinner {
+    font-size: 40px;
+    margin-bottom: 12px;
+    animation: spin 2s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* OCR 日誌框 */
+.ocr-log-box {
+    width: 100%;
+    max-width: 480px;
+    margin: 12px auto 0;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 12px;
+    text-align: left;
+    height: 120px;
+    overflow-y: auto;
+    font-family: 'Consolas', monospace;
+    font-size: 11px;
+    color: var(--neon-green);
+}
+
+/* OCR 結果文字框 */
+.ocr-textarea {
+    width: 100%;
+    min-height: 150px;
+    padding: 14px;
+    font-size: 14px;
+    font-family: var(--font-game);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: var(--text-primary);
+    outline: none;
+    resize: vertical;
+}
+
+.ocr-textarea:focus {
+    border-color: var(--neon-orange);
+}
+
+/* 預覽題目清單 */
+.question-preview-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+}
+
+.question-preview-item input {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: var(--font-game);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: var(--text-primary);
+    outline: none;
+}
+
+/* --- 完成畫面 --- */
+.completion-screen {
+    text-align: center;
+    padding: 40px 0;
+}
+
+.completion-screen .trophy {
+    font-size: 72px;
+    margin-bottom: 16px;
+    display: block;
+    animation: floatBounce 2s ease-in-out infinite;
+}
+
+.completion-screen h2 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.completion-screen p {
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+}
+
+.primary-btn {
+    padding: 12px 32px;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: var(--font-game);
+    background: linear-gradient(135deg, var(--neon-blue), var(--neon-green));
+    color: var(--bg-dark);
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.primary-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+/* --- 列表頁面 (總表) --- */
+.list-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.list-table th {
+    padding: 12px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.list-table td {
+    padding: 12px;
+    font-size: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    color: var(--text-primary);
+}
+
+.list-table tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.table-unit {
+    color: var(--text-dim);
+    font-size: 12px;
+}
+
+.table-word {
+    font-weight: 700;
+    color: var(--neon-blue);
+}
+
+.table-answer {
+    color: var(--neon-green);
+    font-weight: 600;
+}
+
+.table-action-btn {
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px;
+    transition: transform 0.2s;
+}
+
+.table-action-btn:hover {
+    transform: scale(1.2);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-dim);
+}
+
+.empty-state .empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    display: block;
+}
+
+/* --- 錯題本 --- */
+.mistake-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.mistake-item .mistake-info h4 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 3px;
+}
+
+.mistake-item .mistake-info p {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.mistake-count-badge {
+    background: rgba(255, 45, 149, 0.15);
+    color: var(--neon-pink);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.retry-btn {
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: var(--font-game);
+    background: rgba(0, 212, 255, 0.1);
+    color: var(--neon-blue);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.retry-btn:hover {
+    background: rgba(0, 212, 255, 0.2);
+}
+
+/* --- 升等動畫 --- */
+.level-up-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.level-up-content {
+    text-align: center;
+    animation: scaleIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.level-up-icon {
+    font-size: 80px;
+    margin-bottom: 16px;
+    animation: floatBounce 2s ease-in-out infinite;
+}
+
+.level-up-text {
+    font-size: 42px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--neon-yellow), var(--neon-orange));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 4px;
+    margin-bottom: 8px;
+}
+
+.level-up-title {
+    font-size: 24px;
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.level-up-detail {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+}
+
+.level-up-btn {
+    padding: 12px 36px;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: var(--font-game);
+    background: linear-gradient(135deg, var(--neon-yellow), var(--neon-orange));
+    color: var(--bg-dark);
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.level-up-btn:hover {
+    transform: scale(1.08);
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* --- XP 浮動提示 --- */
+.xp-popup {
+    position: fixed;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--neon-green);
+    text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+    z-index: 100;
+    pointer-events: none;
+    animation: xpFloat 1.5s ease-out forwards;
+}
+
+@keyframes xpFloat {
+    0% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-40px);
+    }
+}
+
+/* --- 通用動畫 --- */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-5px);
+    }
+
+    75% {
+        transform: translateX(5px);
+    }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.4s ease forwards;
+}
+
+.animate-slide-up {
+    animation: slideUp 0.4s ease forwards;
+}
+
+.animate-shake {
+    animation: shake 0.3s ease-in-out;
+}
+
+/* --- 模態框 --- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(6px);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.modal-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border-glow);
+    border-radius: 20px;
+    padding: 28px;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: var(--shadow-neon);
+    animation: scaleIn 0.3s ease;
+}
+
+.modal-box h3 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+}
+
+.modal-input {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: var(--font-game);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: var(--text-primary);
+    outline: none;
+    margin-bottom: 12px;
+}
+
+.modal-input:focus {
+    border-color: var(--neon-blue);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.modal-cancel-btn {
+    padding: 8px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--font-game);
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 10px;
+    transition: background 0.2s;
+}
+
+.modal-cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.modal-save-btn {
+    padding: 8px 24px;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: var(--font-game);
+    background: linear-gradient(135deg, var(--neon-blue), var(--neon-green));
+    color: var(--bg-dark);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.modal-save-btn:hover {
+    transform: scale(1.03);
+}
+
+/* --- 模式切換 Tabs --- */
+.mode-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.mode-tab {
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: var(--font-game);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mode-tab.active {
+    background: rgba(0, 212, 255, 0.1);
+    border-color: var(--neon-blue);
+    color: var(--neon-blue);
+}
+
+.mode-tab:hover {
+    border-color: var(--neon-blue);
+}
+
+/* --- 自訂滾軸 --- */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* --- 響應式設計 --- */
+@media (max-width: 640px) {
+    .hud-center {
+        display: none;
+    }
+
+    .mission-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .game-area {
+        padding: 20px;
+    }
+
+    .vocab-word {
+        font-size: 24px;
+    }
+
+    .vocab-image {
+        font-size: 48px;
+    }
+
+    .player-card {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .player-stats-row {
+        justify-content: center;
+    }
+
+    .import-controls {
+        flex-direction: column;
+    }
+}
+
+/* OCR 統計徽章 */
+.ocr-stat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+/* 匯入幫助框 */
+.import-help-box {
+    background: rgba(0, 212, 255, 0.05);
+    border: 1px solid rgba(0, 212, 255, 0.15);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+}
+
+.import-help-box h4 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.import-help-box p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.import-help-box strong {
+    color: var(--neon-blue);
+}
+
+.ocr-warning-box {
+    border-color: rgba(255, 138, 0, 0.3);
+    background: rgba(255, 138, 0, 0.05);
+}
+
+/* 格式範例 */
+.import-format-examples {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.format-example {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+}
+
+.format-tag {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--neon-green);
+    background: rgba(0, 255, 136, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.format-example code {
+    font-size: 12px;
+    color: var(--text-primary);
+    font-family: 'Fredoka', monospace;
+}
+
+/* 預覽標題 */
+.preview-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+}
+
+/* 預覽項目 */
+.question-preview-item {
+    background: var(--bg-surface);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+}
+
+.preview-label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.preview-word-input,
+.preview-chinese-input {
+    width: 100%;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Fredoka', sans-serif;
+}
+
+.preview-word-input:focus,
+.preview-chinese-input:focus {
+    outline: none;
+    border-color: var(--neon-blue);
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15);
+}
+
+.preview-delete-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(255, 56, 100, 0.1);
+    border: 1px solid rgba(255, 56, 100, 0.2);
+    color: var(--neon-pink);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    align-self: flex-end;
+    margin-bottom: 2px;
+}
+
+.preview-delete-btn:hover {
+    background: rgba(255, 56, 100, 0.2);
+}
+
+/* 匯入按鈕全寬 */
+.import-btn-full {
+    margin-top: 14px;
+    width: 100%;
+}
+
+/* 新增按鈕（列表標題） */
+.add-btn {
+    padding: 6px 14px;
+    background: linear-gradient(135deg, var(--neon-green), #00c853);
+    color: var(--bg-darker);
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Fredoka', sans-serif;
+}
+
+.add-btn:hover {
+    transform: scale(1.05);
+}
+
+/* 發音按鈕 */
+.speak-btn {
+    font-size: 16px !important;
+}
+
+/* 列表區域 */
+.list-area {
+    padding: 16px;
+}
+
+/* 表格操作 */
+.table-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.table-question {
+    font-weight: 600;
+}
+
+.table-explanation {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* 處理中面板 */
+.processing-center {
+    text-align: center;
+    padding: 32px 0;
+}
+
+.processing-title {
+    font-size: 16px;
+    color: var(--neon-orange);
+    font-weight: 700;
+}
+
+.processing-status {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* 模態框共用樣式 */
+.modal-label {
+    display: block;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    margin-top: 10px;
+    font-weight: 600;
+}
+
+.modal-hint {
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+/* 首頁文字色彩 */
+.player-level-text {
+    font-size: 12px;
+    color: var(--neon-blue);
+}
+
+.text-pink {
+    color: var(--neon-pink);
+}
+
+.text-orange {
+    color: var(--neon-orange);
+}
+
+/* 空狀態 */
+.empty-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.empty-subtitle {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 4px;
+}
+
+/* 區段標題 */
+.section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+}
+
+/* 全寬按鈕 */
+.full-width {
+    margin-top: 16px;
+    width: 100%;
+}
+
+/* 隱藏元素 */
+.hidden {
+    display: none !important;
+}
