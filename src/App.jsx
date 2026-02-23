@@ -1142,22 +1142,31 @@ const EnglishLearningGame = () => {
                                                 )}
                                                 <button onClick={async () => {
                                                     if (batchSelectedIds.length === 0) return;
-                                                    const updated = vocabularyData.map(item =>
-                                                        batchSelectedIds.includes(item.id) ? { ...item, label: batchLabel } : item
-                                                    );
-                                                    await saveVocabulary(updated);
-                                                    setBatchSelectedIds([]);
-                                                    setBatchLabel('');
-                                                    alert(`✅ 已將 ${batchSelectedIds.length} 個單字的標籤改為「${batchLabel || '(無標籤)'}」`);
+                                                    try {
+                                                        const { batchUpdateVocabularyLabel } = await import('./firestore');
+                                                        await batchUpdateVocabularyLabel(batchSelectedIds, batchLabel);
+                                                        alert(`✅ 已將 ${batchSelectedIds.length} 個單字的標籤改為「${batchLabel || '(無標籤)'}」`);
+                                                        setBatchSelectedIds([]);
+                                                        setBatchLabel('');
+                                                    } catch (error) {
+                                                        console.error('批次修改標籤失敗:', error);
+                                                        alert('❌ 修改失敗，請重試');
+                                                    }
                                                 }} disabled={batchSelectedIds.length === 0}
                                                     className="bg-cyan-500 hover:bg-cyan-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap flex items-center gap-1">
                                                     <Tag className="w-4 h-4" /> 套用
                                                 </button>
                                                 <button onClick={async () => {
                                                     if (!confirm(`確定要刪除這 ${batchSelectedIds.length} 個單字嗎？`)) return;
-                                                    const updated = vocabularyData.filter(item => !batchSelectedIds.includes(item.id));
-                                                    await saveVocabulary(updated);
-                                                    setBatchSelectedIds([]);
+                                                    try {
+                                                        for (const id of batchSelectedIds) {
+                                                            await deleteVocabularyItem(id);
+                                                        }
+                                                        setBatchSelectedIds([]);
+                                                    } catch (error) {
+                                                        console.error('批次刪除失敗:', error);
+                                                        alert('❌ 刪除失敗，請重試');
+                                                    }
                                                 }} disabled={batchSelectedIds.length === 0}
                                                     className="bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white px-3 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap">
                                                     <Trash2 className="w-4 h-4" />
@@ -1252,7 +1261,8 @@ const EnglishLearningGame = () => {
                         )}
                     </div>
                 </div>
-            )}
+            )
+            }
 
             {/* 遊戲主介面 */}
             <div className="relative z-10 max-w-4xl mx-auto px-6 pb-12">
@@ -1466,7 +1476,7 @@ const EnglishLearningGame = () => {
         .animate-bounce-slow { animation: bounce-slow 2s infinite; }
         .animate-shake { animation: shake 0.5s; }
       `}</style>
-        </div>
+        </div >
     );
 };
 
