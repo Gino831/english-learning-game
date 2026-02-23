@@ -453,13 +453,11 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
 
     // 處理單字練習的題型切換 (動詞三態支援)
     useEffect(() => {
-        if (gameMode === 'vocabulary' && currentItem) {
-            // 如果單字具備過去式資訊，則隨機切換題型
+        const isVocab = gameMode === 'vocabulary' || (gameMode === 'review' && currentItem?.mode === 'vocabulary');
+        if (isVocab && currentItem) {
+            // 如果單字具備過去式資訊，則切換成三態測驗
             if (currentItem.past && currentItem.participle) {
-                const rand = Math.random();
-                if (rand < 0.2) setVocabQuestionType('past');
-                else if (rand < 0.4) setVocabQuestionType('participle');
-                else setVocabQuestionType('meaning');
+                setVocabQuestionType('all_tenses');
             } else {
                 setVocabQuestionType('meaning');
             }
@@ -760,10 +758,18 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
 
         if (isVocabMode) {
             // 單字模式：根據題型比對原形、過去式或過去分詞
-            const target = vocabQuestionType === 'past' ? currentItem.past :
-                vocabQuestionType === 'participle' ? currentItem.participle :
-                    currentItem.word;
-            correct = answer.toLowerCase().trim() === (target || '').toLowerCase().trim();
+            if (vocabQuestionType === 'all_tenses') {
+                const parts = answer.toLowerCase().replace(/,/g, ' ').split(/\s+/).filter(Boolean);
+                correct = parts.length === 3 &&
+                    parts[0] === currentItem.word.toLowerCase() &&
+                    parts[1] === currentItem.past.toLowerCase() &&
+                    parts[2] === currentItem.participle.toLowerCase();
+            } else {
+                const target = vocabQuestionType === 'past' ? currentItem.past :
+                    vocabQuestionType === 'participle' ? currentItem.participle :
+                        currentItem.word;
+                correct = answer.toLowerCase().trim() === (target || '').toLowerCase().trim();
+            }
         } else {
             // 文法模式：根據題型使用不同判斷邏輯
             switch (grammarType) {
@@ -1862,12 +1868,14 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                         <div className="text-center mb-8">
                             <div className="text-9xl mb-6 animate-bounce-slow">{currentItem.emoji || '📝'}</div>
                             <div className="text-5xl font-black text-gray-800 mb-2">
-                                {vocabQuestionType === 'past' ? <><span className="text-orange-600">"{currentItem.word}"</span> 的過去式 (V2 / Past Simple)</> :
-                                    vocabQuestionType === 'participle' ? <><span className="text-orange-600">"{currentItem.word}"</span> 的過去分詞 (V3 / Past Participle)</> :
-                                        currentItem.chinese}
+                                {vocabQuestionType === 'all_tenses' ? <><span className="text-orange-600">"{currentItem.chinese}"</span> 的動詞三態</> :
+                                    vocabQuestionType === 'past' ? <><span className="text-orange-600">"{currentItem.word}"</span> 的過去式 (V2 / Past Simple)</> :
+                                        vocabQuestionType === 'participle' ? <><span className="text-orange-600">"{currentItem.word}"</span> 的過去分詞 (V3 / Past Participle)</> :
+                                            currentItem.chinese}
                             </div>
                             <div className="text-xl text-gray-500 font-bold mb-4">
-                                {vocabQuestionType === 'meaning' ? (currentItem.pronunciation || '') : '請輸入正確的動詞變化'}
+                                {vocabQuestionType === 'meaning' ? (currentItem.pronunciation || '') :
+                                    vocabQuestionType === 'all_tenses' ? '請依序輸入: 原形 過去式 過去分詞 (可用空白隔開)' : '請輸入正確的動詞變化'}
                             </div>
                             <button onClick={() => playSound((currentItem.past && currentItem.participle) ? [currentItem.word, currentItem.past, currentItem.participle] : currentItem.word)}
                                 className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-4 rounded-2xl font-black text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-3 mx-auto">
@@ -1876,7 +1884,7 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                         </div>
                         <input type="text" value={userAnswer} onChange={(e) => setUserAnswer(e.target.value)}
                             onKeyPress={(e) => e.key === 'Enter' && userAnswer && handleAnswer(userAnswer)}
-                            placeholder={vocabQuestionType === 'meaning' ? "輸入英文單字..." : "輸入動詞變化..."}
+                            placeholder={vocabQuestionType === 'meaning' ? "輸入英文單字..." : vocabQuestionType === 'all_tenses' ? "例: go went gone" : "輸入動詞變化..."}
                             className={`w-full px-8 py-6 text-3xl font-bold border-4 ${vocabQuestionType === 'meaning' ? 'border-purple-300 focus:border-purple-500' : 'border-orange-300 focus:border-orange-500'} rounded-2xl focus:outline-none text-center mb-6`} autoFocus />
                         <button onClick={() => userAnswer && handleAnswer(userAnswer)} disabled={!userAnswer}
                             className="w-full bg-gradient-to-r from-green-500 to-emerald-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-8 py-6 rounded-2xl font-black text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
@@ -2014,7 +2022,14 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                         {currentItem.mode === 'vocabulary' ? (<>
                             <div className="text-center mb-8">
                                 <div className="text-9xl mb-6 animate-bounce-slow">{currentItem.emoji || '📝'}</div>
-                                <div className="text-6xl font-black text-gray-800 mb-4">{currentItem.chinese}</div>
+                                <div className="text-6xl font-black text-gray-800 mb-4">
+                                    {vocabQuestionType === 'all_tenses' ? <><span className="text-orange-600">"{currentItem.chinese}"</span> 的動詞三態</> : currentItem.chinese}
+                                </div>
+                                {vocabQuestionType === 'all_tenses' && (
+                                    <div className="text-xl text-gray-500 font-bold mb-4">
+                                        請依序輸入: 原形 過去式 過去分詞 (可用空白隔開)
+                                    </div>
+                                )}
                                 <button onClick={() => playSound((currentItem.past && currentItem.participle) ? [currentItem.word, currentItem.past, currentItem.participle] : currentItem.word)}
                                     className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-4 rounded-2xl font-black text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-3 mx-auto">
                                     <Volume2 className="w-6 h-6" /> 聽{(currentItem.past && currentItem.participle) ? '三態' : ''}發音
@@ -2022,7 +2037,7 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                             </div>
                             <input type="text" value={userAnswer} onChange={(e) => setUserAnswer(e.target.value)}
                                 onKeyPress={(e) => e.key === 'Enter' && userAnswer && handleAnswer(userAnswer)}
-                                placeholder="輸入英文單字..." className="w-full px-8 py-6 text-3xl font-bold border-4 border-orange-300 rounded-2xl focus:outline-none focus:border-orange-500 text-center mb-6" autoFocus />
+                                placeholder={vocabQuestionType === 'all_tenses' ? "例: go went gone" : "輸入英文單字..."} className="w-full px-8 py-6 text-3xl font-bold border-4 border-orange-300 rounded-2xl focus:outline-none focus:border-orange-500 text-center mb-6" autoFocus />
                             <button onClick={() => userAnswer && handleAnswer(userAnswer)} disabled={!userAnswer}
                                 className="w-full bg-gradient-to-r from-orange-500 to-red-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-8 py-6 rounded-2xl font-black text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
                                 <Target className="w-8 h-8" /> 發射答案！
@@ -2145,9 +2160,10 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                     <div className="bg-blue-50 rounded-2xl p-8 mb-6">
                                         <div className="text-3xl font-black text-gray-800 mb-3">正確答案：</div>
                                         <div className="text-5xl font-black text-blue-600 mb-4">
-                                            {vocabQuestionType === 'past' ? currentItem.past :
-                                                vocabQuestionType === 'participle' ? currentItem.participle :
-                                                    currentItem.word}
+                                            {vocabQuestionType === 'all_tenses' ? `${currentItem.word}, ${currentItem.past}, ${currentItem.participle}` :
+                                                vocabQuestionType === 'past' ? currentItem.past :
+                                                    vocabQuestionType === 'participle' ? currentItem.participle :
+                                                        currentItem.word}
                                         </div>
 
                                         {/* 動詞三態對照表 */}
