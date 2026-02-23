@@ -839,10 +839,10 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
             // 至少等 2 秒（讓例句有時間開始播放）
             setTimeout(checkSpeech, 2000);
         } else {
-            // 無例句時（例如文法題）：若答對維持 2.5 秒跳題，答錯則延長時間以便閱讀詳解（文法題 8 秒，其他 4 秒）
+            // 無例句時（例如文法題）：若答對維持 2.5 秒跳題，答錯則延長時間以便閱讀詳解（文法題 15 秒，單字題 4 秒）
             let delayTime = 2500;
             if (!correct) {
-                delayTime = isVocabMode ? 4000 : 8000;
+                delayTime = isVocabMode ? 4000 : 15000;
             }
             setTimeout(goNext, delayTime);
         }
