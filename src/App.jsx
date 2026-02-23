@@ -839,8 +839,12 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
             // 至少等 2 秒（讓例句有時間開始播放）
             setTimeout(checkSpeech, 2000);
         } else {
-            // 無例句時維持原本 2500ms
-            setTimeout(goNext, 2500);
+            // 無例句時（例如文法題）：若答對維持 2.5 秒跳題，答錯則延長時間以便閱讀詳解（文法題 8 秒，其他 4 秒）
+            let delayTime = 2500;
+            if (!correct) {
+                delayTime = isVocabMode ? 4000 : 8000;
+            }
+            setTimeout(goNext, delayTime);
         }
     };
 
@@ -895,26 +899,26 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
             </div>
 
             {/* 頂部資訊欄 */}
-            <div className="relative z-10 p-3 sm:p-6">
-                <div className="flex flex-col sm:flex-row justify-between items-center max-w-6xl mx-auto gap-3 sm:gap-0">
-                    <div className="flex gap-3 sm:gap-6 w-full sm:w-auto justify-center">
-                        <div className="bg-yellow-400 text-gray-900 px-4 py-2 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl font-black text-base sm:text-xl shadow-lg transform hover:scale-105 transition-transform flex items-center gap-2">
-                            <Trophy className="w-5 h-5 sm:w-6 sm:h-6" /> {score}
+            <div className="relative z-10 p-2 md:p-6">
+                <div className="flex flex-row justify-between items-center max-w-6xl mx-auto gap-2 md:gap-4">
+                    <div className="flex gap-2 md:gap-6">
+                        <div className="bg-yellow-400 text-gray-900 px-3 py-1.5 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-black text-sm md:text-xl shadow-lg flex items-center gap-1 md:gap-2">
+                            <Trophy className="w-4 h-4 md:w-6 md:h-6" /> {score}
                         </div>
-                        <div className="bg-pink-500 text-white px-4 py-2 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl font-black text-base sm:text-xl shadow-lg transform hover:scale-105 transition-transform flex items-center gap-2">
-                            <Star className="w-5 h-5 sm:w-6 sm:h-6 fill-white" /> {stars}
+                        <div className="bg-pink-500 text-white px-3 py-1.5 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-black text-sm md:text-xl shadow-lg flex items-center gap-1 md:gap-2">
+                            <Star className="w-4 h-4 md:w-6 md:h-6 fill-white" /> {stars}
                         </div>
                     </div>
-                    <div className="flex gap-3 sm:gap-4 w-full sm:w-auto justify-center">
-                        <div className="bg-orange-500 text-white px-4 py-2 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl font-black text-base sm:text-xl shadow-lg flex items-center gap-2">
-                            <Zap className="w-5 h-5 sm:w-6 sm:h-6 fill-white" />
-                            <span className="hidden sm:inline">連擊 </span>{streak}
+                    <div className="flex gap-2 md:gap-4">
+                        <div className="bg-orange-500 text-white px-3 py-1.5 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-black text-sm md:text-xl shadow-lg flex items-center gap-1 md:gap-2">
+                            <Zap className="w-4 h-4 md:w-6 md:h-6 fill-white" />
+                            <span className="hidden md:inline">連擊 </span>{streak}
                         </div>
                         {gameMode === 'menu' && (
                             <button onClick={() => setShowManagePanel(!showManagePanel)}
-                                className="bg-cyan-500 hover:bg-cyan-600 text-white px-4 py-2 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl font-black text-base sm:text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-2">
-                                <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
-                                <span className="hidden sm:inline">題庫管理</span>
+                                className="bg-cyan-500 hover:bg-cyan-600 text-white px-3 py-1.5 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-black text-sm md:text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-1 md:gap-2">
+                                <Settings className="w-4 h-4 md:w-6 md:h-6" />
+                                <span className="hidden md:inline">管理</span>
                             </button>
                         )}
                     </div>
@@ -1806,17 +1810,17 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
             <div className="relative z-10 max-w-4xl mx-auto px-6 pb-12">
                 {gameMode === 'menu' && !showManagePanel && (
                     <div className="text-center">
-                        <h1 className="text-7xl font-black text-white mb-4 tracking-tight drop-shadow-lg animate-bounce-slow">🚀 英語太空站</h1>
-                        <p className="text-2xl text-pink-300 mb-12 font-bold">選擇你的任務！</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <h1 className="text-5xl md:text-7xl font-black text-white mb-2 md:mb-4 tracking-tight drop-shadow-lg animate-bounce-slow">🚀 英語太空站</h1>
+                        <p className="text-lg md:text-2xl text-pink-300 mb-8 md:mb-12 font-bold">選擇你的任務！</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                             {/* 單字卡 */}
                             <div className="relative">
                                 <button onClick={() => { if (allLabels.length > 0) { setSelectedLabels([]); setShowLabelPicker(true); } else startGame('vocabulary'); }}
-                                    className="group w-full bg-gradient-to-br from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 p-8 rounded-3xl shadow-2xl transform hover:scale-105 hover:-rotate-1 transition-all duration-300">
-                                    <div className="text-7xl mb-4 group-hover:animate-bounce">📚</div>
-                                    <div className="text-white text-3xl font-black mb-2">單字卡</div>
-                                    <div className="text-blue-100 text-lg font-bold">學習新單字</div>
-                                    <div className="text-blue-200 text-sm font-bold mt-2">({vocabularyData.length} 個)</div>
+                                    className="group w-full bg-gradient-to-br from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 p-6 md:p-8 rounded-3xl shadow-2xl transform hover:scale-105 hover:-rotate-1 transition-all duration-300">
+                                    <div className="text-6xl md:text-7xl mb-2 md:mb-4 group-hover:animate-bounce">📚</div>
+                                    <div className="text-white text-2xl md:text-3xl font-black mb-1 md:mb-2">單字卡</div>
+                                    <div className="text-blue-100 text-base md:text-lg font-bold">學習新單字</div>
+                                    <div className="text-blue-200 text-xs md:text-sm font-bold mt-1 md:mt-2">({vocabularyData.length} 個)</div>
                                     {allLabels.length > 0 && <div className="flex flex-wrap gap-1.5 mt-3 justify-center">{allLabels.map(l => <span key={l} className="px-2.5 py-1 bg-blue-800 bg-opacity-40 rounded-lg text-xs font-bold text-blue-100 border border-blue-400 border-opacity-30">{l}</span>)}</div>}
                                 </button>
                                 <button onClick={(e) => { e.stopPropagation(); setManagementMode('vocabulary'); setShowManagePanel(true); }}
@@ -1828,11 +1832,11 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                             {/* 文法射擊 */}
                             <div className="relative">
                                 <button onClick={() => startGame('grammar')}
-                                    className="group w-full bg-gradient-to-br from-green-400 to-emerald-600 hover:from-green-300 hover:to-emerald-500 p-8 rounded-3xl shadow-2xl transform hover:scale-105 hover:rotate-1 transition-all duration-300">
-                                    <div className="text-7xl mb-4 group-hover:animate-bounce">🎯</div>
-                                    <div className="text-white text-3xl font-black mb-2">文法射擊</div>
-                                    <div className="text-green-100 text-lg font-bold">挑戰文法題</div>
-                                    <div className="text-green-200 text-sm font-bold mt-2">({grammarData.length} 題)</div>
+                                    className="group w-full bg-gradient-to-br from-green-400 to-emerald-600 hover:from-green-300 hover:to-emerald-500 p-6 md:p-8 rounded-3xl shadow-2xl transform hover:scale-105 hover:rotate-1 transition-all duration-300">
+                                    <div className="text-6xl md:text-7xl mb-2 md:mb-4 group-hover:animate-bounce">🎯</div>
+                                    <div className="text-white text-2xl md:text-3xl font-black mb-1 md:mb-2">文法射擊</div>
+                                    <div className="text-green-100 text-base md:text-lg font-bold">挑戰文法題</div>
+                                    <div className="text-green-200 text-xs md:text-sm font-bold mt-1 md:mt-2">({grammarData.length} 題)</div>
                                 </button>
                                 <button onClick={(e) => { e.stopPropagation(); setManagementMode('grammar'); setShowManagePanel(true); }}
                                     className="absolute top-3 right-3 text-white text-xl opacity-60 hover:opacity-100 transition-all hover:scale-125 drop-shadow-lg" title="管理文法庫">
@@ -1842,21 +1846,21 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                         </div>
 
                         {/* 第二排：匯入 + 錯題 */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mt-4 md:mt-6">
                             {/* 智慧匯入 */}
                             <button onClick={() => { setShowOCRPanel(true); setPasteText(''); setOcrResult(null); setErrorMessage(''); setImportTab('paste'); }}
-                                className="group bg-gradient-to-br from-purple-400 to-pink-600 hover:from-purple-300 hover:to-pink-500 p-8 rounded-3xl shadow-2xl transform hover:scale-105 transition-all duration-300">
-                                <div className="text-7xl mb-4 group-hover:animate-bounce">✨</div>
-                                <div className="text-white text-3xl font-black mb-2">智慧匯入</div>
-                                <div className="text-purple-100 text-lg font-bold">貼上文字或 AI 圖片辨識</div>
+                                className="group bg-gradient-to-br from-purple-400 to-pink-600 hover:from-purple-300 hover:to-pink-500 p-6 md:p-8 rounded-3xl shadow-2xl transform hover:scale-105 transition-all duration-300">
+                                <div className="text-6xl md:text-7xl mb-2 md:mb-4 group-hover:animate-bounce">✨</div>
+                                <div className="text-white text-2xl md:text-3xl font-black mb-1 md:mb-2">智慧匯入</div>
+                                <div className="text-purple-100 text-base md:text-lg font-bold">貼上文字或 AI 圖片辨識</div>
                             </button>
 
                             {/* 錯題複習 */}
                             <button onClick={() => { setGameMode('review'); setCurrentQuestion(0); }} disabled={wrongAnswers.length === 0}
-                                className={`group p-8 rounded-3xl shadow-2xl transform transition-all duration-300 ${wrongAnswers.length === 0 ? 'bg-gray-600 opacity-50 cursor-not-allowed' : 'bg-gradient-to-br from-orange-400 to-red-600 hover:from-orange-300 hover:to-red-500 hover:scale-105'}`}>
-                                <div className="text-7xl mb-4 group-hover:animate-bounce">📖</div>
-                                <div className="text-white text-3xl font-black mb-2">錯題複習</div>
-                                <div className="text-orange-100 text-lg font-bold">{wrongAnswers.length} 題待複習</div>
+                                className={`group p-6 md:p-8 rounded-3xl shadow-2xl transform transition-all duration-300 ${wrongAnswers.length === 0 ? 'bg-gray-600 opacity-50 cursor-not-allowed' : 'bg-gradient-to-br from-orange-400 to-red-600 hover:from-orange-300 hover:to-red-500 hover:scale-105'}`}>
+                                <div className="text-6xl md:text-7xl mb-2 md:mb-4 group-hover:animate-bounce">📖</div>
+                                <div className="text-white text-2xl md:text-3xl font-black mb-1 md:mb-2">錯題複習</div>
+                                <div className="text-orange-100 text-base md:text-lg font-bold">{wrongAnswers.length} 題待複習</div>
                             </button>
                         </div>
                     </div>
@@ -1864,39 +1868,39 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
 
                 {/* 單字練習 */}
                 {gameMode === 'vocabulary' && currentItem && !showFeedback && (
-                    <div className="bg-white rounded-3xl shadow-2xl p-12 transform hover:scale-[1.02] transition-transform">
-                        <div className="text-center mb-8">
-                            <div className="text-9xl mb-6 animate-bounce-slow">{currentItem.emoji || '📝'}</div>
-                            <div className="text-5xl font-black text-gray-800 mb-2">
+                    <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-12 transform hover:scale-[1.02] transition-transform">
+                        <div className="text-center mb-6 md:mb-8">
+                            <div className="text-7xl md:text-9xl mb-4 md:mb-6 animate-bounce-slow">{currentItem.emoji || '📝'}</div>
+                            <div className="text-3xl md:text-5xl font-black text-gray-800 mb-2">
                                 {vocabQuestionType === 'all_tenses' ? <><span className="text-orange-600">"{currentItem.chinese}"</span> 的動詞三態</> :
                                     vocabQuestionType === 'past' ? <><span className="text-orange-600">"{currentItem.word}"</span> 的過去式 (V2 / Past Simple)</> :
                                         vocabQuestionType === 'participle' ? <><span className="text-orange-600">"{currentItem.word}"</span> 的過去分詞 (V3 / Past Participle)</> :
                                             currentItem.chinese}
                             </div>
-                            <div className="text-xl text-gray-500 font-bold mb-4">
+                            <div className="text-lg md:text-xl text-gray-500 font-bold mb-4">
                                 {vocabQuestionType === 'meaning' ? (currentItem.pronunciation || '') :
                                     vocabQuestionType === 'all_tenses' ? '請依序輸入: 原形 過去式 過去分詞 (可用空白隔開)' : '請輸入正確的動詞變化'}
                             </div>
                             <button onClick={() => playSound((currentItem.past && currentItem.participle) ? [currentItem.word, currentItem.past, currentItem.participle] : currentItem.word)}
-                                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-4 rounded-2xl font-black text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-3 mx-auto">
-                                <Volume2 className="w-6 h-6" /> 聽{currentItem.past && currentItem.participle ? '三態' : '單字'}發音
+                                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 md:px-8 py-3 md:py-4 rounded-2xl font-black text-lg md:text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-3 mx-auto">
+                                <Volume2 className="w-5 h-5 md:w-6 md:h-6" /> 聽{currentItem.past && currentItem.participle ? '三態' : '單字'}發音
                             </button>
                         </div>
                         <input type="text" value={userAnswer} onChange={(e) => setUserAnswer(e.target.value)}
                             onKeyPress={(e) => e.key === 'Enter' && userAnswer && handleAnswer(userAnswer)}
                             placeholder={vocabQuestionType === 'meaning' ? "輸入英文單字..." : vocabQuestionType === 'all_tenses' ? "例: go went gone" : "輸入動詞變化..."}
-                            className={`w-full px-8 py-6 text-3xl font-bold border-4 ${vocabQuestionType === 'meaning' ? 'border-purple-300 focus:border-purple-500' : 'border-orange-300 focus:border-orange-500'} rounded-2xl focus:outline-none text-center mb-6`} autoFocus />
+                            className={`w-full px-4 py-4 md:px-8 md:py-6 text-xl md:text-3xl font-bold border-4 ${vocabQuestionType === 'meaning' ? 'border-purple-300 focus:border-purple-500' : 'border-orange-300 focus:border-orange-500'} rounded-2xl focus:outline-none text-center mb-4 md:mb-6`} autoFocus />
                         <button onClick={() => userAnswer && handleAnswer(userAnswer)} disabled={!userAnswer}
-                            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-8 py-6 rounded-2xl font-black text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
-                            <Target className="w-8 h-8" /> 發射答案！
+                            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-4 md:px-8 md:py-6 rounded-2xl font-black text-xl md:text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
+                            <Target className="w-6 h-6 md:w-8 md:h-8" /> 發射答案！
                         </button>
-                        <div className="text-center mt-6 text-gray-600 font-bold text-lg">題目 {currentQuestion + 1} / {currentData.length}</div>
+                        <div className="text-center mt-4 md:mt-6 text-gray-600 font-bold text-base md:text-lg">題目 {currentQuestion + 1} / {currentData.length}</div>
                     </div>
                 )}
 
                 {/* 文法練習 — 支援多題型 */}
                 {gameMode === 'grammar' && currentItem && !showFeedback && (
-                    <div className="bg-white rounded-3xl shadow-2xl p-12">
+                    <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-12">
                         {/* 題型標籤 */}
                         <div className="flex justify-center mb-4">
                             <span className={`px-4 py-1 rounded-full text-sm font-bold ${(currentItem.type === 'choice' || currentItem.type === 'multiple') ? 'bg-blue-100 text-blue-700' :
@@ -1914,13 +1918,13 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
 
                         {/* 選擇題 */}
                         {(currentItem.type === 'choice' || currentItem.type === 'multiple' || !currentItem.type) && (<>
-                            <div className="text-center mb-8">
-                                <div className="text-5xl font-black text-gray-800 mb-8 leading-tight">{currentItem.question}</div>
+                            <div className="text-center mb-6 md:mb-8">
+                                <div className="text-3xl md:text-5xl font-black text-gray-800 mb-6 md:mb-8 leading-tight">{currentItem.question}</div>
                             </div>
-                            <div className="grid grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                                 {(currentItem.options || []).map((option, index) => (
                                     <button key={index} onClick={() => handleAnswer(index)}
-                                        className="group bg-gradient-to-br from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600 text-white px-8 py-8 rounded-2xl font-black text-3xl shadow-lg transform hover:scale-105 hover:-rotate-1 transition-all relative overflow-hidden">
+                                        className="group bg-gradient-to-br from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600 text-white px-6 py-6 md:px-8 md:py-8 rounded-2xl font-black text-xl md:text-3xl shadow-lg transform hover:scale-105 hover:-rotate-1 transition-all relative overflow-hidden">
                                         <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity"></div>
                                         <div className="relative z-10">{option}</div>
                                     </button>
@@ -1930,10 +1934,10 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
 
                         {/* 填空題 */}
                         {currentItem.type === 'fill' && (<>
-                            <div className="text-center mb-8">
-                                <div className="text-4xl font-black text-gray-800 mb-4 leading-tight">{currentItem.question}</div>
+                            <div className="text-center mb-6 md:mb-8">
+                                <div className="text-2xl md:text-4xl font-black text-gray-800 mb-4 leading-tight">{currentItem.question}</div>
                                 {currentItem.hint && (
-                                    <div className="text-lg text-blue-600 font-bold bg-blue-50 inline-block px-4 py-2 rounded-xl">
+                                    <div className="text-base md:text-lg text-blue-600 font-bold bg-blue-50 inline-block px-4 py-2 rounded-xl">
                                         💡 提示：{currentItem.hint}
                                     </div>
                                 )}
@@ -1941,22 +1945,22 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                             <input type="text" value={userAnswer} onChange={(e) => setUserAnswer(e.target.value)}
                                 onKeyPress={(e) => e.key === 'Enter' && userAnswer && handleAnswer(userAnswer)}
                                 placeholder="輸入答案..."
-                                className="w-full px-8 py-6 text-3xl font-bold border-4 border-green-300 rounded-2xl focus:outline-none focus:border-green-500 text-center mb-6" autoFocus />
+                                className="w-full px-4 py-4 md:px-8 md:py-6 text-xl md:text-3xl font-bold border-4 border-green-300 rounded-2xl focus:outline-none focus:border-green-500 text-center mb-4 md:mb-6" autoFocus />
                             <button onClick={() => userAnswer && handleAnswer(userAnswer)} disabled={!userAnswer}
-                                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-8 py-6 rounded-2xl font-black text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
-                                <Target className="w-8 h-8" /> 送出答案！
+                                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-4 md:px-8 md:py-6 rounded-2xl font-black text-xl md:text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
+                                <Target className="w-6 h-6 md:w-8 md:h-8" /> 送出答案！
                             </button>
                         </>)}
 
                         {/* 改錯題 */}
                         {currentItem.type === 'correction' && (<>
-                            <div className="text-center mb-8">
-                                <div className="text-lg font-bold text-red-600 mb-3">🔍 請找出句子中的錯誤並修正：</div>
-                                <div className="text-4xl font-black text-gray-800 leading-tight bg-red-50 p-6 rounded-2xl border-4 border-red-200">
+                            <div className="text-center mb-6 md:mb-8">
+                                <div className="text-base md:text-lg font-bold text-red-600 mb-2 md:mb-3">🔍 請找出句子中的錯誤並修正：</div>
+                                <div className="text-2xl md:text-4xl font-black text-gray-800 leading-tight bg-red-50 p-4 md:p-6 rounded-2xl border-4 border-red-200">
                                     {currentItem.question}
                                 </div>
                                 {currentItem.errorPart && (
-                                    <div className="mt-3 text-base text-red-500 font-bold">
+                                    <div className="mt-3 text-sm md:text-base text-red-500 font-bold">
                                         ⚠️ 錯誤部分：<span className="underline decoration-wavy decoration-red-500">{currentItem.errorPart}</span>
                                     </div>
                                 )}
@@ -1964,30 +1968,30 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                             <input type="text" value={userAnswer} onChange={(e) => setUserAnswer(e.target.value)}
                                 onKeyPress={(e) => e.key === 'Enter' && userAnswer && handleAnswer(userAnswer)}
                                 placeholder="輸入修正後的完整句子..."
-                                className="w-full px-8 py-6 text-2xl font-bold border-4 border-red-300 rounded-2xl focus:outline-none focus:border-red-500 text-center mb-6" autoFocus />
+                                className="w-full px-4 py-4 md:px-8 md:py-6 text-xl md:text-2xl font-bold border-4 border-red-300 rounded-2xl focus:outline-none focus:border-red-500 text-center mb-4 md:mb-6" autoFocus />
                             <button onClick={() => userAnswer && handleAnswer(userAnswer)} disabled={!userAnswer}
-                                className="w-full bg-gradient-to-r from-red-500 to-pink-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-8 py-6 rounded-2xl font-black text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
-                                <Target className="w-8 h-8" /> 送出修正！
+                                className="w-full bg-gradient-to-r from-red-500 to-pink-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-4 md:px-8 md:py-6 rounded-2xl font-black text-xl md:text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
+                                <Target className="w-6 h-6 md:w-8 md:h-8" /> 送出修正！
                             </button>
                         </>)}
 
                         {/* 重組句 */}
                         {currentItem.type === 'reorder' && (<>
-                            <div className="text-center mb-6">
-                                <div className="text-lg font-bold text-purple-600 mb-4">🔀 請將單字排列成正確的句子：</div>
+                            <div className="text-center mb-4 md:mb-6">
+                                <div className="text-base md:text-lg font-bold text-purple-600 mb-2 md:mb-4">🔀 請將單字排列成正確的句子：</div>
                             </div>
                             {/* 已選的單字 */}
-                            <div className="min-h-[80px] bg-purple-50 rounded-2xl p-4 mb-6 border-4 border-purple-200 flex flex-wrap gap-3 items-center">
-                                {reorderWords.length === 0 && <span className="text-gray-400 font-bold text-xl">👆 點擊下方單字排列...</span>}
+                            <div className="min-h-[60px] md:min-h-[80px] bg-purple-50 rounded-2xl p-3 md:p-4 mb-4 md:mb-6 border-4 border-purple-200 flex flex-wrap gap-2 md:gap-3 items-center">
+                                {reorderWords.length === 0 && <span className="text-gray-400 font-bold text-lg md:text-xl">👆 點擊下方單字排列...</span>}
                                 {reorderWords.map((word, index) => (
                                     <button key={index} onClick={() => setReorderWords(reorderWords.filter((_, i) => i !== index))}
-                                        className="bg-purple-500 text-white px-5 py-3 rounded-xl font-black text-xl shadow-md hover:bg-purple-600 transform hover:scale-105 transition-all">
+                                        className="bg-purple-500 text-white px-4 py-2 md:px-5 md:py-3 rounded-xl font-black text-lg md:text-xl shadow-md hover:bg-purple-600 transform hover:scale-105 transition-all">
                                         {word}
                                     </button>
                                 ))}
                             </div>
                             {/* 可選的單字 */}
-                            <div className="flex flex-wrap gap-3 justify-center mb-6">
+                            <div className="flex flex-wrap gap-2 md:gap-3 justify-center mb-4 md:mb-6">
                                 {(currentItem.words || []).filter(w => {
                                     const remaining = [...(currentItem.words || [])];
                                     reorderWords.forEach(selected => {
@@ -1997,50 +2001,50 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                     return remaining.includes(w);
                                 }).map((word, index) => (
                                     <button key={index} onClick={() => setReorderWords([...reorderWords, word])}
-                                        className="bg-white border-4 border-purple-300 text-purple-700 px-5 py-3 rounded-xl font-black text-xl shadow hover:bg-purple-100 transform hover:scale-105 transition-all">
+                                        className="bg-white border-4 border-purple-300 text-purple-700 px-4 py-2 md:px-5 md:py-3 rounded-xl font-black text-lg md:text-xl shadow hover:bg-purple-100 transform hover:scale-105 transition-all">
                                         {word}
                                     </button>
                                 ))}
                             </div>
                             <button onClick={() => reorderWords.length > 0 && handleAnswer(reorderWords.join(' '))}
                                 disabled={reorderWords.length === 0}
-                                className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-8 py-6 rounded-2xl font-black text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
-                                <Target className="w-8 h-8" /> 送出句子！
+                                className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-4 md:px-8 md:py-6 rounded-2xl font-black text-xl md:text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
+                                <Target className="w-6 h-6 md:w-8 md:h-8" /> 送出句子！
                             </button>
                         </>)}
 
-                        <div className="text-center mt-8 text-gray-600 font-bold text-xl">題目 {currentQuestion + 1} / {grammarData.length}</div>
+                        <div className="text-center mt-6 md:mt-8 text-gray-600 font-bold text-base md:text-xl">題目 {currentQuestion + 1} / {grammarData.length}</div>
                     </div>
                 )}
 
                 {/* 錯題複習 */}
                 {gameMode === 'review' && currentItem && !showFeedback && (
-                    <div className="bg-white rounded-3xl shadow-2xl p-12">
-                        <div className="bg-orange-100 border-4 border-orange-400 rounded-2xl p-6 mb-8">
-                            <div className="text-orange-800 text-2xl font-black text-center flex items-center justify-center gap-3"><RotateCcw className="w-8 h-8" /> 錯題複習模式</div>
+                    <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-12">
+                        <div className="bg-orange-100 border-4 border-orange-400 rounded-2xl p-4 md:p-6 mb-6 md:mb-8">
+                            <div className="text-orange-800 text-xl md:text-2xl font-black text-center flex items-center justify-center gap-2 md:gap-3"><RotateCcw className="w-6 h-6 md:w-8 md:h-8" /> 錯題複習模式</div>
                         </div>
                         {currentItem.mode === 'vocabulary' ? (<>
-                            <div className="text-center mb-8">
-                                <div className="text-9xl mb-6 animate-bounce-slow">{currentItem.emoji || '📝'}</div>
-                                <div className="text-6xl font-black text-gray-800 mb-4">
+                            <div className="text-center mb-6 md:mb-8">
+                                <div className="text-7xl md:text-9xl mb-4 md:mb-6 animate-bounce-slow">{currentItem.emoji || '📝'}</div>
+                                <div className="text-4xl md:text-6xl font-black text-gray-800 mb-3 md:mb-4">
                                     {vocabQuestionType === 'all_tenses' ? <><span className="text-orange-600">"{currentItem.chinese}"</span> 的動詞三態</> : currentItem.chinese}
                                 </div>
                                 {vocabQuestionType === 'all_tenses' && (
-                                    <div className="text-xl text-gray-500 font-bold mb-4">
+                                    <div className="text-lg md:text-xl text-gray-500 font-bold mb-3 md:mb-4">
                                         請依序輸入: 原形 過去式 過去分詞 (可用空白隔開)
                                     </div>
                                 )}
                                 <button onClick={() => playSound((currentItem.past && currentItem.participle) ? [currentItem.word, currentItem.past, currentItem.participle] : currentItem.word)}
-                                    className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-4 rounded-2xl font-black text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-3 mx-auto">
-                                    <Volume2 className="w-6 h-6" /> 聽{(currentItem.past && currentItem.participle) ? '三態' : ''}發音
+                                    className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 md:px-8 py-3 md:py-4 rounded-2xl font-black text-lg md:text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-2 md:gap-3 mx-auto">
+                                    <Volume2 className="w-5 h-5 md:w-6 md:h-6" /> 聽{(currentItem.past && currentItem.participle) ? '三態' : ''}發音
                                 </button>
                             </div>
                             <input type="text" value={userAnswer} onChange={(e) => setUserAnswer(e.target.value)}
                                 onKeyPress={(e) => e.key === 'Enter' && userAnswer && handleAnswer(userAnswer)}
-                                placeholder={vocabQuestionType === 'all_tenses' ? "例: go went gone" : "輸入英文單字..."} className="w-full px-8 py-6 text-3xl font-bold border-4 border-orange-300 rounded-2xl focus:outline-none focus:border-orange-500 text-center mb-6" autoFocus />
+                                placeholder={vocabQuestionType === 'all_tenses' ? "例: go went gone" : "輸入英文單字..."} className="w-full px-4 py-4 md:px-8 md:py-6 text-xl md:text-3xl font-bold border-4 border-orange-300 rounded-2xl focus:outline-none focus:border-orange-500 text-center mb-4 md:mb-6" autoFocus />
                             <button onClick={() => userAnswer && handleAnswer(userAnswer)} disabled={!userAnswer}
-                                className="w-full bg-gradient-to-r from-orange-500 to-red-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-8 py-6 rounded-2xl font-black text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
-                                <Target className="w-8 h-8" /> 發射答案！
+                                className="w-full bg-gradient-to-r from-orange-500 to-red-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-4 md:px-8 md:py-6 rounded-2xl font-black text-xl md:text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-2 md:gap-3">
+                                <Target className="w-6 h-6 md:w-8 md:h-8" /> 發射答案！
                             </button>
                         </>) : (<>
                             {/* 文法錯題複習 — 多題型 */}
@@ -2102,64 +2106,64 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
 
                             {/* 重組句 */}
                             {currentItem.type === 'reorder' && (<>
-                                <div className="text-center mb-6"><div className="text-lg font-bold text-purple-600 mb-4">🔀 請排列成正確句子：</div></div>
-                                <div className="min-h-[80px] bg-orange-50 rounded-2xl p-4 mb-6 border-4 border-orange-200 flex flex-wrap gap-3 items-center">
-                                    {reorderWords.length === 0 && <span className="text-gray-400 font-bold text-xl">👆 點擊排列...</span>}
+                                <div className="text-center mb-4 md:mb-6"><div className="text-base md:text-lg font-bold text-purple-600 mb-2 md:mb-4">🔀 請排列成正確句子：</div></div>
+                                <div className="min-h-[60px] md:min-h-[80px] bg-orange-50 rounded-2xl p-3 md:p-4 mb-4 md:mb-6 border-4 border-orange-200 flex flex-wrap gap-2 md:gap-3 items-center">
+                                    {reorderWords.length === 0 && <span className="text-gray-400 font-bold text-lg md:text-xl">👆 點擊排列...</span>}
                                     {reorderWords.map((word, index) => (
                                         <button key={index} onClick={() => setReorderWords(reorderWords.filter((_, i) => i !== index))}
-                                            className="bg-orange-500 text-white px-5 py-3 rounded-xl font-black text-xl shadow-md hover:bg-orange-600 transition-all">{word}</button>
+                                            className="bg-orange-500 text-white px-4 py-2 md:px-5 md:py-3 rounded-xl font-black text-lg md:text-xl shadow-md hover:bg-orange-600 transition-all">{word}</button>
                                     ))}
                                 </div>
-                                <div className="flex flex-wrap gap-3 justify-center mb-6">
+                                <div className="flex flex-wrap gap-2 md:gap-3 justify-center mb-4 md:mb-6">
                                     {(currentItem.words || []).filter(w => {
                                         const remaining = [...(currentItem.words || [])];
                                         reorderWords.forEach(s => { const idx = remaining.indexOf(s); if (idx !== -1) remaining.splice(idx, 1); });
                                         return remaining.includes(w);
                                     }).map((word, index) => (
                                         <button key={index} onClick={() => setReorderWords([...reorderWords, word])}
-                                            className="bg-white border-4 border-orange-300 text-orange-700 px-5 py-3 rounded-xl font-black text-xl shadow hover:bg-orange-100 transition-all">{word}</button>
+                                            className="bg-white border-4 border-orange-300 text-orange-700 px-4 py-2 md:px-5 md:py-3 rounded-xl font-black text-lg md:text-xl shadow hover:bg-orange-100 transition-all">{word}</button>
                                     ))}
                                 </div>
                                 <button onClick={() => reorderWords.length > 0 && handleAnswer(reorderWords.join(' '))} disabled={reorderWords.length === 0}
-                                    className="w-full bg-gradient-to-r from-orange-500 to-red-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-8 py-6 rounded-2xl font-black text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
-                                    <Target className="w-8 h-8" /> 送出句子！
+                                    className="w-full bg-gradient-to-r from-orange-500 to-red-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-4 md:px-8 md:py-6 rounded-2xl font-black text-xl md:text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-2 md:gap-3">
+                                    <Target className="w-6 h-6 md:w-8 md:h-8" /> 送出句子！
                                 </button>
                             </>)}
                         </>)}
-                        <div className="text-center mt-6 text-gray-600 font-bold text-lg">錯題 {currentQuestion + 1} / {wrongAnswers.length}</div>
+                        <div className="text-center mt-4 md:mt-6 text-gray-600 font-bold text-base md:text-lg">錯題 {currentQuestion + 1} / {wrongAnswers.length}</div>
                     </div>
                 )}
 
                 {/* 回饋畫面 */}
                 {showFeedback && (
-                    <div className={`bg-white rounded-3xl shadow-2xl p-12 transform scale-105 transition-transform ${isCorrect ? 'animate-bounce-slow' : 'animate-shake'}`}>
+                    <div className={`bg-white rounded-3xl shadow-2xl p-6 md:p-12 transform scale-105 transition-transform ${isCorrect ? 'animate-bounce-slow' : 'animate-shake'}`}>
                         <div className="text-center">
                             {isCorrect ? (<>
-                                <div className="text-9xl mb-6">🎉</div>
-                                <div className="text-6xl font-black text-green-600 mb-4 flex items-center justify-center gap-4"><CheckCircle className="w-16 h-16" /> 答對了！</div>
-                                <div className="text-3xl text-gray-700 font-bold mb-6">+100 分</div>
+                                <div className="text-7xl md:text-9xl mb-4 md:mb-6">🎉</div>
+                                <div className="text-4xl md:text-6xl font-black text-green-600 mb-3 md:mb-4 flex items-center justify-center gap-2 md:gap-4"><CheckCircle className="w-12 h-12 md:w-16 md:h-16" /> 答對了！</div>
+                                <div className="text-xl md:text-3xl text-gray-700 font-bold mb-4 md:mb-6">+100 分</div>
                                 {(gameMode === 'vocabulary' || (currentItem && currentItem.mode === 'vocabulary')) && currentItem.sentence && (
-                                    <div className="bg-green-50 rounded-2xl p-6 mb-6 border-2 border-green-200">
-                                        <div className="text-2xl font-black text-green-800 mb-3">🗣️ 例句學習：</div>
-                                        <div className="text-xl text-gray-700 font-bold italic mb-3">"{currentItem.sentence}"</div>
+                                    <div className="bg-green-50 rounded-2xl p-4 md:p-6 mb-4 md:mb-6 border-2 border-green-200">
+                                        <div className="text-xl md:text-2xl font-black text-green-800 mb-2 md:mb-3">🗣️ 例句學習：</div>
+                                        <div className="text-lg md:text-xl text-gray-700 font-bold italic mb-3">"{currentItem.sentence}"</div>
                                         <button onClick={() => playSentence(currentItem.sentence)}
-                                            className="bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white px-5 py-2 rounded-xl font-bold text-base shadow transform hover:scale-105 transition-all flex items-center gap-2 mx-auto">
-                                            <Volume2 className="w-5 h-5" /> 🔊 再聽一次
+                                            className="bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white px-5 py-2 rounded-xl font-bold text-sm md:text-base shadow transform hover:scale-105 transition-all flex items-center gap-2 mx-auto">
+                                            <Volume2 className="w-4 h-4 md:w-5 md:h-5" /> 🔊 再聽一次
                                         </button>
                                     </div>
                                 )}
                                 {streak >= 3 && (
-                                    <div className="bg-yellow-100 border-4 border-yellow-400 rounded-2xl p-6">
-                                        <div className="text-4xl font-black text-yellow-600 flex items-center justify-center gap-3"><Star className="w-10 h-10 fill-yellow-500" /> 連擊獎勵！獲得 1 顆星星！</div>
+                                    <div className="bg-yellow-100 border-4 border-yellow-400 rounded-2xl p-4 md:p-6">
+                                        <div className="text-2xl md:text-4xl font-black text-yellow-600 flex items-center justify-center gap-2 md:gap-3"><Star className="w-8 h-8 md:w-10 md:h-10 fill-yellow-500" /> 連擊獎勵！獲得 1 顆星星！</div>
                                     </div>
                                 )}
                             </>) : (<>
-                                <div className="text-9xl mb-6">😢</div>
-                                <div className="text-6xl font-black text-red-600 mb-4 flex items-center justify-center gap-4"><XCircle className="w-16 h-16" /> 再試試看！</div>
+                                <div className="text-7xl md:text-9xl mb-4 md:mb-6">😢</div>
+                                <div className="text-4xl md:text-6xl font-black text-red-600 mb-3 md:mb-4 flex items-center justify-center gap-2 md:gap-4"><XCircle className="w-12 h-12 md:w-16 md:h-16" /> 再試試看！</div>
                                 {(gameMode === 'vocabulary' || currentItem.mode === 'vocabulary') ? (
-                                    <div className="bg-blue-50 rounded-2xl p-8 mb-6">
-                                        <div className="text-3xl font-black text-gray-800 mb-3">正確答案：</div>
-                                        <div className="text-5xl font-black text-blue-600 mb-4">
+                                    <div className="bg-blue-50 rounded-2xl p-4 md:p-8 mb-4 md:mb-6">
+                                        <div className="text-xl md:text-3xl font-black text-gray-800 mb-2 md:mb-3">正確答案：</div>
+                                        <div className="text-3xl md:text-5xl font-black text-blue-600 mb-3 md:mb-4">
                                             {vocabQuestionType === 'all_tenses' ? `${currentItem.word}, ${currentItem.past}, ${currentItem.participle}` :
                                                 vocabQuestionType === 'past' ? currentItem.past :
                                                     vocabQuestionType === 'participle' ? currentItem.participle :
@@ -2168,23 +2172,23 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
 
                                         {/* 動詞三態對照表 */}
                                         {currentItem.past && (
-                                            <div className="flex flex-col gap-4 mt-6 bg-white border-4 border-blue-100 rounded-2xl p-4">
-                                                <div className="flex gap-4">
-                                                    <div className={`flex-1 p-3 rounded-xl border-2 ${vocabQuestionType === 'meaning' ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}>
-                                                        <div className="text-xs font-black text-gray-400 mb-1">V1 (原形 / Present Simple)</div>
-                                                        <div className="text-xl font-black text-gray-800">{currentItem.word}</div>
+                                            <div className="flex flex-col gap-2 md:gap-4 mt-4 md:mt-6 bg-white border-4 border-blue-100 rounded-2xl p-3 md:p-4">
+                                                <div className="flex flex-col md:flex-row gap-2 md:gap-4">
+                                                    <div className={`flex-1 p-2 md:p-3 rounded-xl border-2 ${vocabQuestionType === 'meaning' ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}>
+                                                        <div className="text-[10px] md:text-xs font-black text-gray-400 mb-1">V1 (原形 / Present Simple)</div>
+                                                        <div className="text-base md:text-xl font-black text-gray-800">{currentItem.word}</div>
                                                     </div>
-                                                    <div className={`flex-1 p-3 rounded-xl border-2 ${vocabQuestionType === 'past' ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}>
-                                                        <div className="text-xs font-black text-gray-400 mb-1">V2 (過去式 / Past Simple)</div>
-                                                        <div className="text-xl font-black text-gray-800">{currentItem.past}</div>
+                                                    <div className={`flex-1 p-2 md:p-3 rounded-xl border-2 ${vocabQuestionType === 'past' ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}>
+                                                        <div className="text-[10px] md:text-xs font-black text-gray-400 mb-1">V2 (過去式 / Past Simple)</div>
+                                                        <div className="text-base md:text-xl font-black text-gray-800">{currentItem.past}</div>
                                                     </div>
-                                                    <div className={`flex-1 p-3 rounded-xl border-2 ${vocabQuestionType === 'participle' ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}>
-                                                        <div className="text-xs font-black text-gray-400 mb-1">V3 (過去分詞 / Past Participle)</div>
-                                                        <div className="text-xl font-black text-gray-800">{currentItem.participle}</div>
+                                                    <div className={`flex-1 p-2 md:p-3 rounded-xl border-2 ${vocabQuestionType === 'participle' ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}>
+                                                        <div className="text-[10px] md:text-xs font-black text-gray-400 mb-1">V3 (過去分詞 / Past Participle)</div>
+                                                        <div className="text-base md:text-xl font-black text-gray-800">{currentItem.participle}</div>
                                                     </div>
                                                 </div>
                                                 <button onClick={() => playSound([currentItem.word, currentItem.past, currentItem.participle])}
-                                                    className="bg-gradient-to-r from-blue-400 to-indigo-500 hover:from-blue-500 hover:to-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow transform hover:scale-105 transition-all flex items-center justify-center gap-2 mx-auto w-1/2">
+                                                    className="bg-gradient-to-r from-blue-400 to-indigo-500 hover:from-blue-500 hover:to-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow transform hover:scale-105 transition-all flex items-center justify-center gap-2 mx-auto w-full md:w-1/2 mt-2 md:mt-0">
                                                     <Volume2 className="w-4 h-4" /> 🔊 聽三態發音
                                                 </button>
                                             </div>
@@ -2192,8 +2196,8 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
 
                                         {currentItem.sentence && (
                                             <div className="mt-4 pt-4 border-t-2 border-blue-200">
-                                                <div className="text-xl font-black text-gray-700 mb-2">🗣️ 例句：</div>
-                                                <div className="text-lg text-gray-600 font-bold italic mb-3">"{currentItem.sentence}"</div>
+                                                <div className="text-lg md:text-xl font-black text-gray-700 mb-2">🗣️ 例句：</div>
+                                                <div className="text-base md:text-lg text-gray-600 font-bold italic mb-3">"{currentItem.sentence}"</div>
                                                 <button onClick={() => playSentence(currentItem.sentence)}
                                                     className="bg-gradient-to-r from-blue-400 to-indigo-500 hover:from-blue-500 hover:to-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow transform hover:scale-105 transition-all flex items-center gap-2 mx-auto">
                                                     <Volume2 className="w-4 h-4" /> 🔊 再聽一次
@@ -2202,22 +2206,22 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                         )}
                                     </div>
                                 ) : (<>
-                                    <div className="bg-blue-50 rounded-2xl p-8 mb-6">
-                                        <div className="text-3xl font-black text-gray-800 mb-3">正確答案：</div>
-                                        <div className="text-4xl font-black text-blue-600">
+                                    <div className="bg-blue-50 rounded-2xl p-4 md:p-8 mb-4 md:mb-6">
+                                        <div className="text-xl md:text-3xl font-black text-gray-800 mb-2 md:mb-3">正確答案：</div>
+                                        <div className="text-2xl md:text-4xl font-black text-blue-600">
                                             {(currentItem.type === 'choice' || currentItem.type === 'multiple' || !currentItem.type)
                                                 ? (currentItem.options || [])[currentItem.correct]
                                                 : currentItem.answer || ''}
                                         </div>
                                     </div>
                                     {currentItem.explanation && (
-                                        <div className="bg-yellow-50 border-4 border-yellow-300 rounded-2xl p-6">
-                                            <div className="text-2xl font-black text-yellow-800 mb-3">💡 詳細解析：</div>
-                                            <div className="text-xl text-gray-700 font-bold leading-relaxed whitespace-pre-line">{currentItem.explanation}</div>
+                                        <div className="bg-yellow-50 border-4 border-yellow-300 rounded-2xl p-4 md:p-6">
+                                            <div className="text-xl md:text-2xl font-black text-yellow-800 mb-2 md:mb-3">💡 詳細解析：</div>
+                                            <div className="text-base md:text-xl text-gray-700 font-bold leading-relaxed whitespace-pre-line text-left">{currentItem.explanation}</div>
                                         </div>
                                     )}
                                 </>)}
-                                <div className="mt-6 text-xl text-orange-600 font-black">已加入錯題本 📖</div>
+                                <div className="mt-4 md:mt-6 text-lg md:text-xl text-orange-600 font-black">已加入錯題本 📖</div>
                             </>)}
                         </div>
                     </div>
