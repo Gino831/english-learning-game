@@ -53,6 +53,8 @@ export const addVocabularyItem = async (item) => {
         pronunciation: item.pronunciation || '',
         emoji: item.emoji || '📝',
         sentence: item.sentence || '',
+        past: item.past || '',          // 過去式 (V2)
+        participle: item.participle || '', // 過去分詞 (V3)
         label: item.label || '',
         correctCount: 0,   // 熟度：答對次數
         totalCount: 0,     // 熟度：作答次數
@@ -97,6 +99,8 @@ export const batchAddVocabulary = async (items) => {
             pronunciation: item.pronunciation || '',
             emoji: item.emoji || '📝',
             sentence: item.sentence || '',
+            past: item.past || '',
+            participle: item.participle || '',
             label: item.label || '',
             correctCount: 0,
             totalCount: 0,
@@ -144,19 +148,27 @@ export const subscribeGrammar = (callback) => {
 };
 
 /**
- * 新增文法題
- * @param {Object} item - 文法題資料（不含 id）
+ * 新增文法題（支援多題型）
+ * type: 'choice' | 'fill' | 'correction' | 'reorder'
+ * @param {Object} item - 文法題資料
  * @returns {Promise<string>} 新增文件的 ID
  */
 export const addGrammarItem = async (item) => {
-    const docRef = await addDoc(grammarRef, {
+    // 共用欄位
+    const data = {
+        type: item.type || 'choice',
         question: item.question || '',
-        options: item.options || ['', '', '', ''],
-        correct: item.correct ?? 0,
         explanation: item.explanation || '',
-        type: item.type || 'multiple',
         createdAt: serverTimestamp()
-    });
+    };
+    // 題型專屬欄位
+    if (item.options) data.options = item.options;
+    if (item.correct !== undefined) data.correct = item.correct;
+    if (item.answer) data.answer = item.answer;
+    if (item.hint) data.hint = item.hint;
+    if (item.errorPart) data.errorPart = item.errorPart;
+    if (item.words) data.words = item.words;
+    const docRef = await addDoc(grammarRef, data);
     return docRef.id;
 };
 
@@ -181,7 +193,7 @@ export const deleteGrammarItem = async (docId) => {
 };
 
 /**
- * 批次新增文法題（匯入用）
+ * 批次新增文法題（匯入用，支援多題型）
  * @param {Array} items - 文法題陣列
  * @returns {Promise<number>} 新增的數量
  */
@@ -189,14 +201,19 @@ export const batchAddGrammar = async (items) => {
     const batch = writeBatch(db);
     items.forEach(item => {
         const newDocRef = doc(grammarRef);
-        batch.set(newDocRef, {
+        const data = {
+            type: item.type || 'choice',
             question: item.question || '',
-            options: item.options || ['', '', '', ''],
-            correct: item.correct ?? 0,
             explanation: item.explanation || '',
-            type: item.type || 'multiple',
             createdAt: serverTimestamp()
-        });
+        };
+        if (item.options) data.options = item.options;
+        if (item.correct !== undefined) data.correct = item.correct;
+        if (item.answer) data.answer = item.answer;
+        if (item.hint) data.hint = item.hint;
+        if (item.errorPart) data.errorPart = item.errorPart;
+        if (item.words) data.words = item.words;
+        batch.set(newDocRef, data);
     });
     await batch.commit();
     return items.length;
