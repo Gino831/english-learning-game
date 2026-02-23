@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Volume2, Star, Trophy, BookOpen, Target, Zap, ArrowRight, RotateCcw, CheckCircle, XCircle, Plus, Edit, Trash2, Settings, Save, X, Camera, Upload, Loader, Sparkles, AlertCircle, ClipboardPaste, FileText, Key, Eye, EyeOff, Tag, Filter, CheckSquare, Square } from 'lucide-react';
+import {
+    subscribeVocabulary,
+    subscribeGrammar,
+    addVocabularyItem,
+    updateVocabularyItem,
+    deleteVocabularyItem,
+    batchAddVocabulary,
+    addGrammarItem,
+    updateGrammarItem,
+    deleteGrammarItem,
+    batchAddGrammar,
+    updateVocabularyMastery
+} from './firestore';
 
 const EnglishLearningGame = () => {
     const [gameMode, setGameMode] = useState('menu');
@@ -14,6 +27,7 @@ const EnglishLearningGame = () => {
     const [shuffledData, setShuffledData] = useState([]); // 隨機打亂後的題目順序
     const [selectedLabel, setSelectedLabel] = useState('all'); // 單字分類篩選
     const [showLabelPicker, setShowLabelPicker] = useState(false); // 開始測驗前的標籤選擇器
+    const [selectedLabels, setSelectedLabels] = useState([]); // checkbox 勾選的標籤
     const [batchSelectedIds, setBatchSelectedIds] = useState([]); // 批次勾選的單字 ID
     const [batchLabel, setBatchLabel] = useState(''); // 批次修改的目標標籤
 
@@ -55,8 +69,19 @@ const EnglishLearningGame = () => {
         question: '', options: ['', '', '', ''], correct: 0, explanation: ''
     });
 
+    // Firestore 即時監聽 — 自動同步所有裝置的資料
     useEffect(() => {
-        loadData();
+        const unsubVocab = subscribeVocabulary((items) => {
+            setVocabularyData(items);
+        });
+        const unsubGrammar = subscribeGrammar((items) => {
+            setGrammarData(items);
+        });
+        // 元件卸載時取消監聽
+        return () => {
+            unsubVocab();
+            unsubGrammar();
+        };
     }, []);
 
     // 回答後自動朗讀例句
@@ -74,56 +99,6 @@ const EnglishLearningGame = () => {
             return () => clearTimeout(timer);
         }
     }, [showFeedback]);
-
-    const loadData = async () => {
-        try {
-            const vocabResult = await window.storage.get('vocabulary-data');
-            const grammarResult = await window.storage.get('grammar-data');
-
-            if (vocabResult) {
-                setVocabularyData(JSON.parse(vocabResult.value));
-            } else {
-                const defaultVocab = [
-                    { id: 1, word: 'apple', chinese: '蘋果', pronunciation: '/ˈæp.əl/', emoji: '🍎', sentence: 'I eat an apple every day.', label: '第一課' },
-                    { id: 2, word: 'cat', chinese: '貓', pronunciation: '/kæt/', emoji: '🐱', sentence: 'My cat is sleeping.', label: '第一課' },
-                    { id: 3, word: 'sun', chinese: '太陽', pronunciation: '/sʌn/', emoji: '☀️', sentence: 'The sun is shining.', label: '第二課' }
-                ];
-                setVocabularyData(defaultVocab);
-                await window.storage.set('vocabulary-data', JSON.stringify(defaultVocab));
-            }
-
-            if (grammarResult) {
-                setGrammarData(JSON.parse(grammarResult.value));
-            } else {
-                const defaultGrammar = [
-                    { id: 1, question: 'She ___ to school every day.', options: ['go', 'goes', 'going', 'went'], correct: 1, explanation: '主詞是第三人稱單數（She），動詞要加 -s 或 -es。every day 表示習慣性動作，要用現在簡單式。' },
-                    { id: 2, question: 'I ___ homework yesterday.', options: ['do', 'does', 'did', 'doing'], correct: 2, explanation: 'yesterday 是過去的時間，要用過去式 did。' }
-                ];
-                setGrammarData(defaultGrammar);
-                await window.storage.set('grammar-data', JSON.stringify(defaultGrammar));
-            }
-        } catch (error) {
-            console.error('載入資料失敗:', error);
-        }
-    };
-
-    const saveVocabulary = async (newData) => {
-        try {
-            await window.storage.set('vocabulary-data', JSON.stringify(newData));
-            setVocabularyData(newData);
-        } catch (error) {
-            console.error('儲存單字失敗:', error);
-        }
-    };
-
-    const saveGrammar = async (newData) => {
-        try {
-            await window.storage.set('grammar-data', JSON.stringify(newData));
-            setGrammarData(newData);
-        } catch (error) {
-            console.error('儲存文法失敗:', error);
-        }
-    };
 
     // 儲存 Google API Key 到 localStorage
     const saveApiKey = () => {
@@ -355,54 +330,104 @@ const EnglishLearningGame = () => {
         }
     };
 
+    // 批次匯入 AI/貼上解析的結果到 Firestore
     const addAllOCRItems = async () => {
         if (!ocrResult || !ocrResult.items) return;
         try {
             if (ocrResult.type === 'vocabulary') {
-                const newItems = ocrResult.items.map(item => ({ id: Date.now() + Math.random(), word: item.word || '', chinese: item.chinese || '', pronunciation: item.pronunciation || '', emoji: item.emoji || '📝', sentence: item.sentence || '', label: importLabel || '' }));
-                await saveVocabulary([...vocabularyData, ...newItems]);
-                alert(`✅ 成功新增 ${newItems.length} 個單字！`);
+                const newItems = ocrResult.items.map(item => ({
+                    word: item.word || '', chinese: item.chinese || '',
+                    pronunciation: item.pronunciation || '', emoji: item.emoji || '📝',
+                    sentence: item.sentence || '', label: importLabel || ''
+                }));
+                const count = await batchAddVocabulary(newItems);
+                alert(`✅ 成功新增 ${count} 個單字！`);
             } else if (ocrResult.type === 'grammar') {
-                const newItems = ocrResult.items.map(item => ({ id: Date.now() + Math.random(), question: item.question || '', options: item.options || ['', '', '', ''], correct: item.correct || 0, explanation: item.explanation || '', type: 'multiple' }));
-                await saveGrammar([...grammarData, ...newItems]);
-                alert(`✅ 成功新增 ${newItems.length} 個文法題！`);
+                const newItems = ocrResult.items.map(item => ({
+                    question: item.question || '', options: item.options || ['', '', '', ''],
+                    correct: item.correct || 0, explanation: item.explanation || '',
+                    type: 'multiple'
+                }));
+                const count = await batchAddGrammar(newItems);
+                alert(`✅ 成功新增 ${count} 個文法題！`);
             }
             setShowOCRPanel(false); setUploadedImage(null); setOcrResult(null); setImportLabel('');
-        } catch (error) { alert('❌ 新增失敗，請重試'); }
+        } catch (error) {
+            console.error('匯入失敗:', error);
+            alert('❌ 新增失敗，請重試');
+        }
     };
 
+    // 新增單字到 Firestore
     const addVocabulary = async () => {
         if (!vocabForm.word || !vocabForm.chinese) { alert('請至少填寫單字和中文！'); return; }
-        await saveVocabulary([...vocabularyData, { id: Date.now(), ...vocabForm }]);
-        setVocabForm({ word: '', chinese: '', pronunciation: '', emoji: '', sentence: '' });
+        try {
+            await addVocabularyItem(vocabForm);
+            setVocabForm({ word: '', chinese: '', pronunciation: '', emoji: '', sentence: '', label: '' });
+        } catch (error) {
+            console.error('新增單字失敗:', error);
+            alert('❌ 新增失敗');
+        }
     };
 
+    // 更新單字到 Firestore
     const updateVocabulary = async () => {
-        const updated = vocabularyData.map(item => item.id === editingItem.id ? { ...editingItem, ...vocabForm } : item);
-        await saveVocabulary(updated);
-        setEditingItem(null);
-        setVocabForm({ word: '', chinese: '', pronunciation: '', emoji: '', sentence: '' });
+        try {
+            await updateVocabularyItem(editingItem.id, vocabForm);
+            setEditingItem(null);
+            setVocabForm({ word: '', chinese: '', pronunciation: '', emoji: '', sentence: '', label: '' });
+        } catch (error) {
+            console.error('更新單字失敗:', error);
+            alert('❌ 更新失敗');
+        }
     };
 
+    // 刪除單字
     const deleteVocabulary = async (id) => {
-        if (confirm('確定要刪除這個單字嗎？')) await saveVocabulary(vocabularyData.filter(item => item.id !== id));
+        if (confirm('確定要刪除這個單字嗎？')) {
+            try {
+                await deleteVocabularyItem(id);
+            } catch (error) {
+                console.error('刪除單字失敗:', error);
+                alert('❌ 刪除失敗');
+            }
+        }
     };
 
+    // 新增文法題到 Firestore
     const addGrammar = async () => {
         if (!grammarForm.question || grammarForm.options.some(opt => !opt)) { alert('請填寫所有欄位！'); return; }
-        await saveGrammar([...grammarData, { id: Date.now(), ...grammarForm, type: 'multiple' }]);
-        setGrammarForm({ question: '', options: ['', '', '', ''], correct: 0, explanation: '' });
+        try {
+            await addGrammarItem({ ...grammarForm, type: 'multiple' });
+            setGrammarForm({ question: '', options: ['', '', '', ''], correct: 0, explanation: '' });
+        } catch (error) {
+            console.error('新增文法題失敗:', error);
+            alert('❌ 新增失敗');
+        }
     };
 
+    // 更新文法題到 Firestore
     const updateGrammar = async () => {
-        const updated = grammarData.map(item => item.id === editingItem.id ? { ...editingItem, ...grammarForm } : item);
-        await saveGrammar(updated);
-        setEditingItem(null);
-        setGrammarForm({ question: '', options: ['', '', '', ''], correct: 0, explanation: '' });
+        try {
+            await updateGrammarItem(editingItem.id, grammarForm);
+            setEditingItem(null);
+            setGrammarForm({ question: '', options: ['', '', '', ''], correct: 0, explanation: '' });
+        } catch (error) {
+            console.error('更新文法題失敗:', error);
+            alert('❌ 更新失敗');
+        }
     };
 
+    // 刪除文法題
     const deleteGrammar = async (id) => {
-        if (confirm('確定要刪除這個文法題嗎？')) await saveGrammar(grammarData.filter(item => item.id !== id));
+        if (confirm('確定要刪除這個文法題嗎？')) {
+            try {
+                await deleteGrammarItem(id);
+            } catch (error) {
+                console.error('刪除文法題失敗:', error);
+                alert('❌ 刪除失敗');
+            }
+        }
     };
 
     const startEdit = (item, type) => {
@@ -412,6 +437,37 @@ const EnglishLearningGame = () => {
         } else {
             setGrammarForm({ question: item.question, options: item.options, correct: item.correct, explanation: item.explanation || '' });
         }
+    };
+
+    // 計算單字熟度星星數（0~5）
+    const getMasteryStars = (item) => {
+        const total = item.totalCount || 0;
+        const correct = item.correctCount || 0;
+        if (total === 0) return 0; // 未學習
+        const rate = correct / total;
+        if (rate >= 0.8 && total >= 3) return 5; // 已精通
+        if (rate >= 0.6 && total >= 2) return 4; // 熟練
+        if (rate >= 0.4) return 3; // 普通
+        if (correct > 0) return 2; // 需加強
+        return 1; // 全錯
+    };
+
+    // 熟度星星顯示元件
+    const MasteryStars = ({ item }) => {
+        const stars = getMasteryStars(item);
+        const total = item.totalCount || 0;
+        const correct = item.correctCount || 0;
+        const labels = ['未學習', '初學', '需加強', '普通', '熟練', '已精通'];
+        return (
+            <div className="flex items-center gap-1" title={`${correct}/${total} 正確 — ${labels[stars]}`}>
+                {[1, 2, 3, 4, 5].map(i => (
+                    <span key={i} className={`text-sm ${i <= stars ? 'text-yellow-400' : 'text-gray-300'}`}>
+                        {i <= stars ? '★' : '☆'}
+                    </span>
+                ))}
+                <span className="text-xs text-gray-400 ml-1">{total > 0 ? `${correct}/${total}` : ''}</span>
+            </div>
+        );
     };
 
     // Fisher-Yates 隨機打亂演算法
@@ -465,13 +521,43 @@ const EnglishLearningGame = () => {
                 setWrongAnswers([...wrongAnswers, { ...currentItem, mode: gameMode === 'review' ? currentItem.mode : gameMode }]);
             }
         }
-        setTimeout(() => {
+
+        // 更新單字熟度（僅限單字模式）
+        const isVocabMode = gameMode === 'vocabulary' || (gameMode === 'review' && currentItem?.mode === 'vocabulary');
+        if (isVocabMode && currentItem?.id) {
+            updateVocabularyMastery(currentItem.id, correct).catch(err => {
+                console.error('更新熟度失敗:', err);
+            });
+        }
+
+        // 跳下一題的共用函式
+        const goNext = () => {
             setShowFeedback(false);
             setUserAnswer('');
             const dataLength = gameMode === 'review' ? wrongAnswers.length : currentData.length;
             if (currentQuestion < dataLength - 1) setCurrentQuestion(currentQuestion + 1);
             else { setGameMode('menu'); setCurrentQuestion(0); setShuffledData([]); }
-        }, 2500);
+        };
+
+        // 判斷是否有例句會朗讀（單字模式且有例句）
+        const hasSentence = currentItem?.sentence &&
+            (gameMode === 'vocabulary' || (gameMode === 'review' && currentItem?.mode === 'vocabulary'));
+
+        if (hasSentence) {
+            // 等語音播完後再延遲 1 秒跳題
+            const checkSpeech = () => {
+                if (!speechSynthesis.speaking) {
+                    setTimeout(goNext, 1000);
+                } else {
+                    setTimeout(checkSpeech, 300); // 每 300ms 檢查一次
+                }
+            };
+            // 至少等 2 秒（讓例句有時間開始播放）
+            setTimeout(checkSpeech, 2000);
+        } else {
+            // 無例句時維持原本 2500ms
+            setTimeout(goNext, 2500);
+        }
     };
 
     const resetGame = () => { setCurrentQuestion(0); setUserAnswer(''); setShowFeedback(false); };
@@ -480,11 +566,11 @@ const EnglishLearningGame = () => {
     const allLabels = [...new Set(vocabularyData.map(v => v.label).filter(Boolean))];
 
     // 開始遊戲時打亂題目順序（支援按標籤篩選）
-    const startGame = (mode, label = 'all') => {
+    const startGame = (mode, labels = []) => {
         let data = mode === 'vocabulary' ? vocabularyData : grammarData;
         // 如果是單字模式且選擇了特定標籤，先篩選
-        if (mode === 'vocabulary' && label !== 'all') {
-            data = data.filter(item => item.label === label);
+        if (mode === 'vocabulary' && labels.length > 0) {
+            data = data.filter(item => labels.includes(item.label));
         }
         if (data.length === 0) {
             alert(mode === 'vocabulary' ? '此分類下沒有單字！' : '請先在題庫管理中新增文法題！');
@@ -493,7 +579,15 @@ const EnglishLearningGame = () => {
         setShuffledData(shuffleArray(data)); // 隨機打亂
         setGameMode(mode);
         setShowLabelPicker(false);
+        setSelectedLabels([]);
         resetGame();
+    };
+
+    // 切換 checkbox 勾選狀態
+    const toggleLabel = (label) => {
+        setSelectedLabels(prev =>
+            prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label]
+        );
     };
 
     return (
@@ -533,7 +627,7 @@ const EnglishLearningGame = () => {
                 </div>
             </div>
 
-            {/* 標籤選擇器彈窗 - 測驗前選擇分類 */}
+            {/* 標籤選擇器彈窗 - 測驗前用 checkbox 勾選分類 */}
             {showLabelPicker && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-6">
                     <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full">
@@ -541,30 +635,46 @@ const EnglishLearningGame = () => {
                             <h2 className="text-3xl font-black text-gray-800 flex items-center gap-3">
                                 <Tag className="w-8 h-8 text-cyan-500" /> 選擇測驗範圍
                             </h2>
-                            <button onClick={() => setShowLabelPicker(false)}
+                            <button onClick={() => { setShowLabelPicker(false); setSelectedLabels([]); }}
                                 className="bg-gray-400 hover:bg-gray-500 text-white p-2 rounded-xl transition-all">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
                         <div className="space-y-3">
-                            {/* 全部 */}
-                            <button onClick={() => startGame('vocabulary', 'all')}
-                                className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white p-5 rounded-2xl font-black text-xl shadow-lg transform hover:scale-[1.02] transition-all flex items-center justify-between">
-                                <span>📚 全部單字</span>
-                                <span className="bg-white bg-opacity-20 px-3 py-1 rounded-full text-base">{vocabularyData.length} 個</span>
+                            {/* 全選 / 取消全選 */}
+                            <button onClick={() => setSelectedLabels(selectedLabels.length === allLabels.length ? [] : [...allLabels])}
+                                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 p-4 rounded-2xl font-bold text-base transition-all flex items-center gap-3">
+                                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${selectedLabels.length === allLabels.length ? 'bg-cyan-500 border-cyan-500' : 'border-gray-400'}`}>
+                                    {selectedLabels.length === allLabels.length && <CheckCircle className="w-4 h-4 text-white" />}
+                                </div>
+                                📚 全選 ({vocabularyData.length} 個)
                             </button>
-                            {/* 各分類 */}
+                            {/* 各分類 checkbox */}
                             {allLabels.map(label => {
                                 const count = vocabularyData.filter(v => v.label === label).length;
+                                const isChecked = selectedLabels.includes(label);
                                 return (
-                                    <button key={label} onClick={() => startGame('vocabulary', label)}
-                                        className="w-full bg-gradient-to-r from-indigo-400 to-purple-500 hover:from-indigo-500 hover:to-purple-600 text-white p-5 rounded-2xl font-black text-xl shadow-lg transform hover:scale-[1.02] transition-all flex items-center justify-between">
-                                        <span>🏷️ {label}</span>
-                                        <span className="bg-white bg-opacity-20 px-3 py-1 rounded-full text-base">{count} 個</span>
+                                    <button key={label} onClick={() => toggleLabel(label)}
+                                        className={`w-full p-4 rounded-2xl font-bold text-lg transition-all flex items-center gap-3 ${isChecked
+                                            ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
+                                        <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${isChecked ? 'bg-white border-white' : 'border-gray-400'}`}>
+                                            {isChecked && <CheckCircle className="w-4 h-4 text-purple-600" />}
+                                        </div>
+                                        <span className="flex-1 text-left">🏷️ {label}</span>
+                                        <span className={`text-sm font-bold ${isChecked ? 'text-purple-200' : 'text-gray-400'}`}>{count} 個</span>
                                     </button>
                                 );
                             })}
                         </div>
+                        {/* 開始測驗按鈕 */}
+                        <button onClick={() => {
+                            if (selectedLabels.length === 0) startGame('vocabulary', []);
+                            else startGame('vocabulary', selectedLabels);
+                        }}
+                            className="w-full mt-6 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white p-5 rounded-2xl font-black text-xl shadow-lg transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
+                            🚀 開始測驗（{selectedLabels.length === 0 ? vocabularyData.length : vocabularyData.filter(v => selectedLabels.includes(v.label)).length} 題）
+                        </button>
                     </div>
                 </div>
             )}
@@ -1072,7 +1182,10 @@ const EnglishLearningGame = () => {
                                                     <div>
                                                         <div className="text-xl font-black text-gray-800">{item.word}</div>
                                                         <div className="text-lg text-gray-600 font-bold">{item.chinese}</div>
-                                                        {item.label && <span className="inline-block mt-1 px-2 py-0.5 bg-cyan-100 text-cyan-700 text-xs font-bold rounded-full">{item.label}</span>}
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            {item.label && <span className="inline-block px-2 py-0.5 bg-cyan-100 text-cyan-700 text-xs font-bold rounded-full">{item.label}</span>}
+                                                            <MasteryStars item={item} />
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
@@ -1150,17 +1263,17 @@ const EnglishLearningGame = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* 單字卡 */}
                             <div className="relative">
-                                <button onClick={() => { if (allLabels.length > 0) setShowLabelPicker(true); else startGame('vocabulary'); }}
+                                <button onClick={() => { if (allLabels.length > 0) { setSelectedLabels([]); setShowLabelPicker(true); } else startGame('vocabulary'); }}
                                     className="group w-full bg-gradient-to-br from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 p-8 rounded-3xl shadow-2xl transform hover:scale-105 hover:-rotate-1 transition-all duration-300">
                                     <div className="text-7xl mb-4 group-hover:animate-bounce">📚</div>
                                     <div className="text-white text-3xl font-black mb-2">單字卡</div>
                                     <div className="text-blue-100 text-lg font-bold">學習新單字</div>
                                     <div className="text-blue-200 text-sm font-bold mt-2">({vocabularyData.length} 個)</div>
-                                    {allLabels.length > 0 && <div className="flex flex-wrap gap-1 mt-3 justify-center">{allLabels.map(l => <span key={l} className="px-2 py-0.5 bg-white bg-opacity-20 rounded-full text-xs font-bold text-white">{l}</span>)}</div>}
+                                    {allLabels.length > 0 && <div className="flex flex-wrap gap-1.5 mt-3 justify-center">{allLabels.map(l => <span key={l} className="px-2.5 py-1 bg-blue-800 bg-opacity-40 rounded-lg text-xs font-bold text-blue-100 border border-blue-400 border-opacity-30">{l}</span>)}</div>}
                                 </button>
                                 <button onClick={(e) => { e.stopPropagation(); setManagementMode('vocabulary'); setShowManagePanel(true); }}
-                                    className="absolute top-3 right-3 bg-white bg-opacity-20 hover:bg-opacity-40 text-white p-2 rounded-xl transition-all" title="管理單字庫">
-                                    <Settings className="w-5 h-5" />
+                                    className="absolute top-3 right-3 text-white text-xl opacity-60 hover:opacity-100 transition-all hover:scale-125 drop-shadow-lg" title="管理單字庫">
+                                    ⚙️
                                 </button>
                             </div>
 
@@ -1174,8 +1287,8 @@ const EnglishLearningGame = () => {
                                     <div className="text-green-200 text-sm font-bold mt-2">({grammarData.length} 題)</div>
                                 </button>
                                 <button onClick={(e) => { e.stopPropagation(); setManagementMode('grammar'); setShowManagePanel(true); }}
-                                    className="absolute top-3 right-3 bg-white bg-opacity-20 hover:bg-opacity-40 text-white p-2 rounded-xl transition-all" title="管理文法庫">
-                                    <Settings className="w-5 h-5" />
+                                    className="absolute top-3 right-3 text-white text-xl opacity-60 hover:opacity-100 transition-all hover:scale-125 drop-shadow-lg" title="管理文法庫">
+                                    ⚙️
                                 </button>
                             </div>
                         </div>
