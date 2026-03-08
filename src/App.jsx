@@ -928,7 +928,7 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
             {/* 標籤選擇器彈窗 - 測驗前用 checkbox 勾選分類 */}
             {showLabelPicker && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-6">
-                    <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full">
+                    <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-3xl font-black text-gray-800 flex items-center gap-3">
                                 <Tag className="w-8 h-8 text-cyan-500" /> 選擇測驗範圍
