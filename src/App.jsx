@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Volume2, Star, Trophy, BookOpen, Target, Zap, ArrowRight, RotateCcw, CheckCircle, XCircle, Plus, Edit, Trash2, Settings, Save, X, Camera, Upload, Loader, Sparkles, AlertCircle, ClipboardPaste, FileText, Key, Eye, EyeOff, Tag, Filter, CheckSquare, Square, RefreshCcw } from 'lucide-react';
+import { Volume2, Star, Trophy, BookOpen, Target, Zap, ArrowRight, RotateCcw, CheckCircle, XCircle, Plus, Edit, Trash2, Settings, Save, X, Camera, Upload, Loader, Sparkles, AlertCircle, ClipboardPaste, FileText, Key, Eye, EyeOff, Tag, Filter, CheckSquare, Square, RefreshCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
     subscribeVocabulary,
     subscribeGrammar,
@@ -56,6 +56,14 @@ const EnglishLearningGame = () => {
         try { return localStorage.getItem('gemini-api-model') || 'gemini-1.5-flash'; } catch { return 'gemini-1.5-flash'; }
     });
     const [availableModels, setAvailableModels] = useState([]); // 儲存 API 回傳的可用模型列表
+
+    // ===== 翻牌式單字卡 =====
+    const [flashcardFlipped, setFlashcardFlipped] = useState(false); // 卡片是否翻面
+    const [flashcardQueue, setFlashcardQueue] = useState([]); // 練習佇列
+    const [flashcardIndex, setFlashcardIndex] = useState(0); // 目前瀏覽的索引
+    const [flashcardCompleted, setFlashcardCompleted] = useState(0); // 已標為「已熟」的數量
+    const [flashcardTotal, setFlashcardTotal] = useState(0); // 開始時的總數量
+    const [flashcardKey, setFlashcardKey] = useState(0); // 用於觸發卡片切換動畫
 
     // 儲存模型選擇
     const saveApiModel = (model) => {
@@ -451,13 +459,29 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
     };
 
 
-    // 處理單字練習的題型切換 (動詞三態支援)
+    // 產生句子填空提示：將單字替換為首字母 + ___ + 尾字母
+    // 例："activities" → "a___s"，"popular" → "p___r"
+    const generateSentenceFill = (word, sentence) => {
+        if (!word || !sentence) return { hint: '', display: sentence || '' };
+        const w = word.toLowerCase();
+        // 產生提示字：首字母 + 底線 + 尾字母
+        const hint = w.length <= 2 ? w[0] + '___' : w[0] + '___' + w[w.length - 1];
+        // 在句子中找到單字並替換（不分大小寫）
+        const regex = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '\\b', 'i');
+        const display = sentence.replace(regex, '______');
+        return { hint, display };
+    };
+
+    // 處理單字練習的題型切換 (動詞三態 + 句子填空支援)
     useEffect(() => {
         const isVocab = gameMode === 'vocabulary' || (gameMode === 'review' && currentItem?.mode === 'vocabulary');
         if (isVocab && currentItem) {
             // 如果單字具備過去式資訊，則切換成三態測驗
             if (currentItem.past && currentItem.participle) {
                 setVocabQuestionType('all_tenses');
+            } else if (currentItem.sentence && currentItem.sentence.toLowerCase().includes(currentItem.word.toLowerCase())) {
+                // 有例句且包含該單字時，隨機選擇「中翻英」或「句子填空」
+                setVocabQuestionType(Math.random() < 0.5 ? 'sentence_fill' : 'meaning');
             } else {
                 setVocabQuestionType('meaning');
             }
@@ -732,6 +756,88 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
         return shuffled;
     };
 
+    // ===== 翻牌式單字卡練習邏輯 =====
+
+    // 開始翻牌練習（篩選標籤後打亂）
+    const startFlashcard = (labels = []) => {
+        let data = vocabularyData;
+        if (labels.length > 0) {
+            data = data.filter(item => labels.includes(item.label));
+        }
+        if (data.length === 0) {
+            alert('此分類下沒有單字！');
+            return;
+        }
+        const shuffled = shuffleArray(data);
+        setFlashcardQueue(shuffled);
+        setFlashcardIndex(0);
+        setFlashcardFlipped(false);
+        setFlashcardCompleted(0);
+        setFlashcardTotal(shuffled.length);
+        setFlashcardKey(0);
+        setGameMode('flashcard');
+        setShowLabelPicker(false);
+        setSelectedLabels([]);
+    };
+
+    // 翻轉卡片
+    const flipCard = () => {
+        setFlashcardFlipped(!flashcardFlipped);
+    };
+
+    // 下一張卡片（known: 是否已熟）
+    const nextFlashcard = (known) => {
+        const current = flashcardQueue[flashcardIndex];
+        let newQueue = [...flashcardQueue];
+
+        if (known) {
+            // 已熟：移除此卡片
+            newQueue.splice(flashcardIndex, 1);
+            setFlashcardCompleted(prev => prev + 1);
+            // 如果刪除後佇列為空，練習完成
+            if (newQueue.length === 0) {
+                setFlashcardQueue([]);
+                return;
+            }
+            // 調整索引（如果刪除的是最後一張，回到第一張）
+            const nextIdx = flashcardIndex >= newQueue.length ? 0 : flashcardIndex;
+            setFlashcardQueue(newQueue);
+            setFlashcardIndex(nextIdx);
+        } else {
+            // 不熟：保留在佇列，前進到下一張，並加入錯題本
+            if (!wrongAnswers.find(item => item.word === current.word)) {
+                setWrongAnswers([...wrongAnswers, { ...current, mode: 'vocabulary' }]);
+            }
+            const nextIdx = (flashcardIndex + 1) % newQueue.length;
+            setFlashcardIndex(nextIdx);
+        }
+
+        setFlashcardFlipped(false);
+        setFlashcardKey(prev => prev + 1);
+    };
+
+    // 上一張卡片
+    const prevFlashcard = () => {
+        if (flashcardQueue.length === 0) return;
+        const prevIdx = flashcardIndex === 0 ? flashcardQueue.length - 1 : flashcardIndex - 1;
+        setFlashcardIndex(prevIdx);
+        setFlashcardFlipped(false);
+        setFlashcardKey(prev => prev + 1);
+    };
+
+    // 翻牌模式：每張卡片自動朗讀英文
+    useEffect(() => {
+        if (gameMode === 'flashcard' && flashcardQueue.length > 0 && !flashcardFlipped) {
+            const item = flashcardQueue[flashcardIndex];
+            if (item) {
+                const timer = setTimeout(() => {
+                    playSound(item.word);
+                }, 300);
+                return () => clearTimeout(timer);
+            }
+        }
+    }, [gameMode, flashcardIndex, flashcardKey]);
+
     const playSound = (text, lang = 'en-US') => {
         speechSynthesis.cancel(); // 停止當前播放
         const textToPlay = Array.isArray(text) ? text.join(', ') : text;
@@ -765,6 +871,7 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                     parts[1] === currentItem.past.toLowerCase() &&
                     parts[2] === currentItem.participle.toLowerCase();
             } else {
+                // sentence_fill 和 meaning 都比對原形單字
                 const target = vocabQuestionType === 'past' ? currentItem.past :
                     vocabQuestionType === 'participle' ? currentItem.participle :
                         currentItem.word;
@@ -933,7 +1040,7 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                             <h2 className="text-3xl font-black text-gray-800 flex items-center gap-3">
                                 <Tag className="w-8 h-8 text-cyan-500" /> 選擇測驗範圍
                             </h2>
-                            <button onClick={() => { setShowLabelPicker(false); setSelectedLabels([]); }}
+                            <button onClick={() => { setShowLabelPicker(false); setSelectedLabels([]); if (gameMode === 'flashcard-pending') setGameMode('menu'); }}
                                 className="bg-gray-400 hover:bg-gray-500 text-white p-2 rounded-xl transition-all">
                                 <X className="w-5 h-5" />
                             </button>
@@ -967,11 +1074,15 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                         </div>
                         {/* 開始測驗按鈕 */}
                         <button onClick={() => {
-                            if (selectedLabels.length === 0) startGame('vocabulary', []);
-                            else startGame('vocabulary', selectedLabels);
+                            if (gameMode === 'flashcard-pending') {
+                                startFlashcard(selectedLabels);
+                            } else {
+                                if (selectedLabels.length === 0) startGame('vocabulary', []);
+                                else startGame('vocabulary', selectedLabels);
+                            }
                         }}
-                            className="w-full mt-6 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white p-5 rounded-2xl font-black text-xl shadow-lg transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
-                            🚀 開始測驗（{selectedLabels.length === 0 ? vocabularyData.length : vocabularyData.filter(v => selectedLabels.includes(v.label)).length} 題）
+                            className={`w-full mt-6 ${gameMode === 'flashcard-pending' ? 'bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700' : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700'} text-white p-5 rounded-2xl font-black text-xl shadow-lg transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2`}>
+                            {gameMode === 'flashcard-pending' ? '🃏' : '🚀'} {gameMode === 'flashcard-pending' ? '開始翻牌練習' : '開始測驗'}（{selectedLabels.length === 0 ? vocabularyData.length : vocabularyData.filter(v => selectedLabels.includes(v.label)).length} {gameMode === 'flashcard-pending' ? '張' : '題'}）
                         </button>
                     </div>
                 </div>
@@ -1845,8 +1956,17 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                             </div>
                         </div>
 
-                        {/* 第二排：匯入 + 錯題 */}
+                        {/* 第二排：翻牌練習 + 智慧匯入 */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mt-4 md:mt-6">
+                            {/* 翻牌練習 */}
+                            <button onClick={() => { if (allLabels.length > 0) { setSelectedLabels([]); setShowLabelPicker(true); setGameMode('flashcard-pending'); } else startFlashcard(); }}
+                                className="group bg-gradient-to-br from-amber-400 to-yellow-600 hover:from-amber-300 hover:to-yellow-500 p-6 md:p-8 rounded-3xl shadow-2xl transform hover:scale-105 hover:rotate-1 transition-all duration-300">
+                                <div className="text-6xl md:text-7xl mb-2 md:mb-4 group-hover:animate-bounce">🃏</div>
+                                <div className="text-white text-2xl md:text-3xl font-black mb-1 md:mb-2">翻牌練習</div>
+                                <div className="text-yellow-100 text-base md:text-lg font-bold">輕鬆瀏覽 + 發音</div>
+                                <div className="text-yellow-200 text-xs md:text-sm font-bold mt-1 md:mt-2">({vocabularyData.length} 個)</div>
+                            </button>
+
                             {/* 智慧匯入 */}
                             <button onClick={() => { setShowOCRPanel(true); setPasteText(''); setOcrResult(null); setErrorMessage(''); setImportTab('paste'); }}
                                 className="group bg-gradient-to-br from-purple-400 to-pink-600 hover:from-purple-300 hover:to-pink-500 p-6 md:p-8 rounded-3xl shadow-2xl transform hover:scale-105 transition-all duration-300">
@@ -1854,7 +1974,10 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                 <div className="text-white text-2xl md:text-3xl font-black mb-1 md:mb-2">智慧匯入</div>
                                 <div className="text-purple-100 text-base md:text-lg font-bold">貼上文字或 AI 圖片辨識</div>
                             </button>
+                        </div>
 
+                        {/* 第三排：錯題複習 */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mt-4 md:mt-6">
                             {/* 錯題複習 */}
                             <button onClick={() => { setGameMode('review'); setCurrentQuestion(0); }} disabled={wrongAnswers.length === 0}
                                 className={`group p-6 md:p-8 rounded-3xl shadow-2xl transform transition-all duration-300 ${wrongAnswers.length === 0 ? 'bg-gray-600 opacity-50 cursor-not-allowed' : 'bg-gradient-to-br from-orange-400 to-red-600 hover:from-orange-300 hover:to-red-500 hover:scale-105'}`}>
@@ -1870,26 +1993,52 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                 {gameMode === 'vocabulary' && currentItem && !showFeedback && (
                     <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-12 transform hover:scale-[1.02] transition-transform">
                         <div className="text-center mb-6 md:mb-8">
-                            <div className="text-7xl md:text-9xl mb-4 md:mb-6 animate-bounce-slow">{currentItem.emoji || '📝'}</div>
-                            <div className="text-3xl md:text-5xl font-black text-gray-800 mb-2">
-                                {vocabQuestionType === 'all_tenses' ? <><span className="text-orange-600">"{currentItem.chinese}"</span> 的動詞三態</> :
-                                    vocabQuestionType === 'past' ? <><span className="text-orange-600">"{currentItem.word}"</span> 的過去式 (V2 / Past Simple)</> :
-                                        vocabQuestionType === 'participle' ? <><span className="text-orange-600">"{currentItem.word}"</span> 的過去分詞 (V3 / Past Participle)</> :
-                                            currentItem.chinese}
-                            </div>
-                            <div className="text-lg md:text-xl text-gray-500 font-bold mb-4">
-                                {vocabQuestionType === 'meaning' ? (currentItem.pronunciation || '') :
-                                    vocabQuestionType === 'all_tenses' ? '請依序輸入: 原形 過去式 過去分詞 (可用空白隔開)' : '請輸入正確的動詞變化'}
-                            </div>
-                            <button onClick={() => playSound((currentItem.past && currentItem.participle) ? [currentItem.word, currentItem.past, currentItem.participle] : currentItem.word)}
-                                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 md:px-8 py-3 md:py-4 rounded-2xl font-black text-lg md:text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-3 mx-auto">
-                                <Volume2 className="w-5 h-5 md:w-6 md:h-6" /> 聽{currentItem.past && currentItem.participle ? '三態' : '單字'}發音
-                            </button>
+                            {/* 句子填空題型 */}
+                            {vocabQuestionType === 'sentence_fill' ? (<>
+                                <div className="flex items-center justify-center gap-2 mb-4">
+                                    <span className="bg-teal-100 text-teal-700 px-4 py-1 rounded-full text-sm font-bold">✏️ 句子填空</span>
+                                </div>
+                                <div className="bg-gradient-to-r from-teal-50 to-cyan-50 border-4 border-teal-200 rounded-2xl p-5 md:p-8 mb-4">
+                                    <div className="text-xl md:text-3xl font-bold text-gray-800 leading-relaxed mb-4">
+                                        {generateSentenceFill(currentItem.word, currentItem.sentence).display}
+                                    </div>
+                                    <div className="bg-white border-2 border-teal-300 rounded-xl px-4 py-2 inline-block">
+                                        <span className="text-sm font-bold text-teal-600">💡 提示：</span>
+                                        <span className="text-2xl md:text-3xl font-black text-teal-700 ml-2">
+                                            {generateSentenceFill(currentItem.word, currentItem.sentence).hint}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="text-base md:text-lg text-gray-500 font-bold mb-4">
+                                    {currentItem.chinese && <span className="bg-gray-100 px-3 py-1 rounded-lg">🇹🇼 {currentItem.chinese}</span>}
+                                </div>
+                                <button onClick={() => playSentence(currentItem.sentence)}
+                                    className="bg-gradient-to-r from-teal-500 to-cyan-600 text-white px-6 md:px-8 py-3 md:py-4 rounded-2xl font-black text-lg md:text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-3 mx-auto">
+                                    <Volume2 className="w-5 h-5 md:w-6 md:h-6" /> 🔊 聽例句
+                                </button>
+                            </>) : (<>
+                                {/* 原有題型：中翻英 / 動詞三態 */}
+                                <div className="text-7xl md:text-9xl mb-4 md:mb-6 animate-bounce-slow">{currentItem.emoji || '📝'}</div>
+                                <div className="text-3xl md:text-5xl font-black text-gray-800 mb-2">
+                                    {vocabQuestionType === 'all_tenses' ? <><span className="text-orange-600">"{currentItem.chinese}"</span> 的動詞三態</> :
+                                        vocabQuestionType === 'past' ? <><span className="text-orange-600">"{currentItem.word}"</span> 的過去式 (V2 / Past Simple)</> :
+                                            vocabQuestionType === 'participle' ? <><span className="text-orange-600">"{currentItem.word}"</span> 的過去分詞 (V3 / Past Participle)</> :
+                                                currentItem.chinese}
+                                </div>
+                                <div className="text-lg md:text-xl text-gray-500 font-bold mb-4">
+                                    {vocabQuestionType === 'meaning' ? (currentItem.pronunciation || '') :
+                                        vocabQuestionType === 'all_tenses' ? '請依序輸入: 原形 過去式 過去分詞 (可用空白隔開)' : '請輸入正確的動詞變化'}
+                                </div>
+                                <button onClick={() => playSound((currentItem.past && currentItem.participle) ? [currentItem.word, currentItem.past, currentItem.participle] : currentItem.word)}
+                                    className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 md:px-8 py-3 md:py-4 rounded-2xl font-black text-lg md:text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-3 mx-auto">
+                                    <Volume2 className="w-5 h-5 md:w-6 md:h-6" /> 聽{currentItem.past && currentItem.participle ? '三態' : '單字'}發音
+                                </button>
+                            </>)}
                         </div>
                         <input type="text" value={userAnswer} onChange={(e) => setUserAnswer(e.target.value)}
                             onKeyPress={(e) => e.key === 'Enter' && userAnswer && handleAnswer(userAnswer)}
-                            placeholder={vocabQuestionType === 'meaning' ? "輸入英文單字..." : vocabQuestionType === 'all_tenses' ? "例: go went gone" : "輸入動詞變化..."}
-                            className={`w-full px-4 py-4 md:px-8 md:py-6 text-xl md:text-3xl font-bold border-4 ${vocabQuestionType === 'meaning' ? 'border-purple-300 focus:border-purple-500' : 'border-orange-300 focus:border-orange-500'} rounded-2xl focus:outline-none text-center mb-4 md:mb-6`} autoFocus />
+                            placeholder={vocabQuestionType === 'sentence_fill' ? "輸入完整單字..." : vocabQuestionType === 'meaning' ? "輸入英文單字..." : vocabQuestionType === 'all_tenses' ? "例: go went gone" : "輸入動詞變化..."}
+                            className={`w-full px-4 py-4 md:px-8 md:py-6 text-xl md:text-3xl font-bold border-4 ${vocabQuestionType === 'sentence_fill' ? 'border-teal-300 focus:border-teal-500' : vocabQuestionType === 'meaning' ? 'border-purple-300 focus:border-purple-500' : 'border-orange-300 focus:border-orange-500'} rounded-2xl focus:outline-none text-center mb-4 md:mb-6`} autoFocus />
                         <button onClick={() => userAnswer && handleAnswer(userAnswer)} disabled={!userAnswer}
                             className="w-full bg-gradient-to-r from-green-500 to-emerald-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-4 md:px-8 md:py-6 rounded-2xl font-black text-xl md:text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
                             <Target className="w-6 h-6 md:w-8 md:h-8" /> 發射答案！
@@ -2131,6 +2280,169 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                             </>)}
                         </>)}
                         <div className="text-center mt-4 md:mt-6 text-gray-600 font-bold text-base md:text-lg">錯題 {currentQuestion + 1} / {wrongAnswers.length}</div>
+                    </div>
+                )}
+
+                {/* ===== 翻牌式單字卡練習 ===== */}
+                {gameMode === 'flashcard' && (
+                    <div className="animate-card-slide-in">
+                        {flashcardQueue.length === 0 ? (
+                            /* 練習完成畫面 */
+                            <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-12 text-center">
+                                <div className="text-8xl md:text-9xl mb-6 animate-bounce-slow">🎉</div>
+                                <div className="text-4xl md:text-5xl font-black text-green-600 mb-4">太棒了！全部完成！</div>
+                                <div className="text-xl md:text-2xl text-gray-600 font-bold mb-2">你已經熟悉了所有 {flashcardTotal} 個單字</div>
+                                <div className="flex items-center justify-center gap-3 mt-6">
+                                    <div className="bg-green-100 border-2 border-green-300 px-6 py-3 rounded-2xl">
+                                        <div className="text-sm font-bold text-green-600">已熟練</div>
+                                        <div className="text-3xl font-black text-green-700">{flashcardTotal}</div>
+                                    </div>
+                                </div>
+                                <button onClick={() => { setGameMode('menu'); }}
+                                    className="mt-8 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-2xl font-black text-xl shadow-lg transform hover:scale-105 transition-all">
+                                    🏠 返回主選單
+                                </button>
+                            </div>
+                        ) : (
+                            /* 翻牌卡片 */
+                            <div>
+                                {/* 進度列 */}
+                                <div className="mb-6">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-white font-bold text-base md:text-lg">📊 進度</span>
+                                        <span className="text-white font-bold text-base md:text-lg">{flashcardCompleted} / {flashcardTotal} 已熟</span>
+                                    </div>
+                                    <div className="w-full bg-white bg-opacity-20 rounded-full h-3">
+                                        <div className="bg-gradient-to-r from-amber-400 to-yellow-500 rounded-full h-3 transition-all duration-500"
+                                            style={{ width: `${(flashcardCompleted / flashcardTotal) * 100}%` }}></div>
+                                    </div>
+                                    <div className="text-white text-sm font-bold mt-1 text-center opacity-70">
+                                        剩餘 {flashcardQueue.length} 張卡片
+                                    </div>
+                                </div>
+
+                                {/* 3D 翻牌卡片 */}
+                                <div className="flashcard-container" key={flashcardKey}>
+                                    <div className={`flashcard ${flashcardFlipped ? 'flipped' : ''} animate-card-slide-in`}
+                                        onClick={flipCard}>
+                                        {/* 正面：英文 */}
+                                        <div className="flashcard-front">
+                                            <div className="text-7xl md:text-8xl mb-4">{flashcardQueue[flashcardIndex]?.emoji || '📝'}</div>
+                                            <div className="text-4xl md:text-5xl font-black text-gray-800 mb-3">
+                                                {flashcardQueue[flashcardIndex]?.word}
+                                            </div>
+                                            {flashcardQueue[flashcardIndex]?.pronunciation && (
+                                                <div className="text-lg md:text-xl text-gray-500 font-mono bg-gray-100 px-4 py-2 rounded-xl border border-gray-200 mb-4">
+                                                    {flashcardQueue[flashcardIndex].pronunciation}
+                                                </div>
+                                            )}
+                                            <button onClick={(e) => { e.stopPropagation(); playSound(flashcardQueue[flashcardIndex]?.word); }}
+                                                className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold text-lg shadow-lg transform hover:scale-105 transition-all flex items-center gap-2">
+                                                <Volume2 className="w-5 h-5" /> 🔊 聽發音
+                                            </button>
+                                            <div className="text-gray-400 font-bold text-sm mt-6 animate-bounce-slow">👆 點擊卡片翻面看答案</div>
+                                        </div>
+
+                                        {/* 背面：中文 + 例句 + 三態 */}
+                                        <div className="flashcard-back">
+                                            <div className="text-3xl md:text-4xl font-black text-amber-700 mb-3">
+                                                {flashcardQueue[flashcardIndex]?.chinese}
+                                            </div>
+
+                                            {/* 動詞三態表格 */}
+                                            {flashcardQueue[flashcardIndex]?.past && flashcardQueue[flashcardIndex]?.participle && (
+                                                <div className="flex gap-2 md:gap-3 mb-4 w-full max-w-md">
+                                                    <div className="flex-1 bg-orange-50 border-2 border-orange-200 rounded-xl p-2 text-center">
+                                                        <div className="text-[10px] font-black text-orange-500 uppercase">V1 原形</div>
+                                                        <div className="text-base md:text-lg font-bold text-gray-800">{flashcardQueue[flashcardIndex]?.word}</div>
+                                                    </div>
+                                                    <div className="flex-1 bg-orange-50 border-2 border-orange-200 rounded-xl p-2 text-center">
+                                                        <div className="text-[10px] font-black text-orange-500 uppercase">V2 過去式</div>
+                                                        <div className="text-base md:text-lg font-bold text-gray-800">{flashcardQueue[flashcardIndex]?.past}</div>
+                                                    </div>
+                                                    <div className="flex-1 bg-orange-50 border-2 border-orange-200 rounded-xl p-2 text-center">
+                                                        <div className="text-[10px] font-black text-orange-500 uppercase">V3 過去分詞</div>
+                                                        <div className="text-base md:text-lg font-bold text-gray-800">{flashcardQueue[flashcardIndex]?.participle}</div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* 例句 */}
+                                            {flashcardQueue[flashcardIndex]?.sentence && (
+                                                <div className="bg-white bg-opacity-70 rounded-xl p-3 md:p-4 mb-4 w-full max-w-md border border-amber-200">
+                                                    <div className="text-sm font-black text-amber-600 mb-1">🗣️ 例句</div>
+                                                    <div className="text-base md:text-lg text-gray-700 font-bold italic">
+                                                        "{flashcardQueue[flashcardIndex].sentence}"
+                                                    </div>
+                                                    <button onClick={(e) => { e.stopPropagation(); playSentence(flashcardQueue[flashcardIndex].sentence); }}
+                                                        className="mt-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white px-4 py-2 rounded-xl font-bold text-sm shadow transform hover:scale-105 transition-all flex items-center gap-2 mx-auto">
+                                                        <Volume2 className="w-4 h-4" /> 聽例句
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* 發音按鈕 */}
+                                            <div className="flex gap-2">
+                                                {flashcardQueue[flashcardIndex]?.past && flashcardQueue[flashcardIndex]?.participle ? (
+                                                    <button onClick={(e) => { e.stopPropagation(); playSound([flashcardQueue[flashcardIndex].word, flashcardQueue[flashcardIndex].past, flashcardQueue[flashcardIndex].participle]); }}
+                                                        className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-5 py-2 rounded-xl font-bold text-sm shadow transform hover:scale-105 transition-all flex items-center gap-2">
+                                                        <Volume2 className="w-4 h-4" /> 聽三態發音
+                                                    </button>
+                                                ) : (
+                                                    <button onClick={(e) => { e.stopPropagation(); playSound(flashcardQueue[flashcardIndex]?.word); }}
+                                                        className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-5 py-2 rounded-xl font-bold text-sm shadow transform hover:scale-105 transition-all flex items-center gap-2">
+                                                        <Volume2 className="w-4 h-4" /> 聽發音
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 底部導航按鈕 */}
+                                <div className="flex items-center justify-center gap-3 mt-6">
+                                    <button onClick={prevFlashcard}
+                                        className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white p-3 md:p-4 rounded-2xl shadow-lg transform hover:scale-110 transition-all">
+                                        <ChevronLeft className="w-6 h-6 md:w-7 md:h-7" />
+                                    </button>
+
+                                    {flashcardFlipped && (
+                                        <>
+                                            <button onClick={() => nextFlashcard(false)}
+                                                className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white px-5 py-3 md:px-7 md:py-4 rounded-2xl font-black text-lg md:text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-2">
+                                                ❌ 不熟
+                                            </button>
+                                            <button onClick={() => nextFlashcard(true)}
+                                                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-5 py-3 md:px-7 md:py-4 rounded-2xl font-black text-lg md:text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-2">
+                                                ✅ 已熟
+                                            </button>
+                                        </>
+                                    )}
+
+                                    {!flashcardFlipped && (
+                                        <button onClick={flipCard}
+                                            className="bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-white px-5 py-3 md:px-7 md:py-4 rounded-2xl font-black text-lg md:text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-2">
+                                            🔄 翻面看答案
+                                        </button>
+                                    )}
+
+                                    <button onClick={() => {
+                                        const nextIdx = (flashcardIndex + 1) % flashcardQueue.length;
+                                        setFlashcardIndex(nextIdx);
+                                        setFlashcardFlipped(false);
+                                        setFlashcardKey(prev => prev + 1);
+                                    }}
+                                        className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white p-3 md:p-4 rounded-2xl shadow-lg transform hover:scale-110 transition-all">
+                                        <ChevronRight className="w-6 h-6 md:w-7 md:h-7" />
+                                    </button>
+                                </div>
+
+                                {/* 卡片計數 */}
+                                <div className="text-center mt-4 text-white font-bold text-base md:text-lg opacity-80">
+                                    第 {flashcardIndex + 1} / {flashcardQueue.length} 張
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
