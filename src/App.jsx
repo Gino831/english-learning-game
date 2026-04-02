@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Volume2, Star, Trophy, BookOpen, Target, Zap, ArrowRight, RotateCcw, CheckCircle, XCircle, Plus, Edit, Trash2, Settings, Save, X, Camera, Upload, Loader, Sparkles, AlertCircle, ClipboardPaste, FileText, Key, Eye, EyeOff, Tag, Filter, CheckSquare, Square, RefreshCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
     subscribeVocabulary,
@@ -7,11 +7,14 @@ import {
     updateVocabularyItem,
     deleteVocabularyItem,
     batchAddVocabulary,
+    batchDeleteVocabulary,
     addGrammarItem,
     updateGrammarItem,
     deleteGrammarItem,
     batchAddGrammar,
-    updateVocabularyMastery
+    updateVocabularyMastery,
+    batchUpdateVocabularyLabel,
+    batchUpdateVocabularySentences
 } from './firestore';
 
 const EnglishLearningGame = () => {
@@ -40,6 +43,9 @@ const EnglishLearningGame = () => {
 
     const [showOCRPanel, setShowOCRPanel] = useState(false);
     const [uploadedImage, setUploadedImage] = useState(null);
+    const [uploadedSentenceImage, setUploadedSentenceImage] = useState(null); // 例句圖片（選填，搭配單字表）
+    const [uploadedSentenceOnlyImage, setUploadedSentenceOnlyImage] = useState(null); // 例句圖片（獨立更新用）
+    const [sentenceUpdateResult, setSentenceUpdateResult] = useState(null); // 例句更新結果
     const [isProcessing, setIsProcessing] = useState(false);
     const [ocrResult, setOcrResult] = useState(null);
     const [processingStatus, setProcessingStatus] = useState('');
@@ -57,13 +63,18 @@ const EnglishLearningGame = () => {
     });
     const [availableModels, setAvailableModels] = useState([]); // 儲存 API 回傳的可用模型列表
 
+    // 語音合成 utterance ref（用於 onend 事件，取代輪詢）
+    const utteranceRef = useRef(null);
+
     // ===== 翻牌式單字卡 =====
-    const [flashcardFlipped, setFlashcardFlipped] = useState(false); // 卡片是否翻面
-    const [flashcardQueue, setFlashcardQueue] = useState([]); // 練習佇列
-    const [flashcardIndex, setFlashcardIndex] = useState(0); // 目前瀏覽的索引
-    const [flashcardCompleted, setFlashcardCompleted] = useState(0); // 已標為「已熟」的數量
-    const [flashcardTotal, setFlashcardTotal] = useState(0); // 開始時的總數量
-    const [flashcardKey, setFlashcardKey] = useState(0); // 用於觸發卡片切換動畫
+    const [flashcardFlipped, setFlashcardFlipped] = useState(false);
+    const [flashcardQueue, setFlashcardQueue] = useState([]);
+    const [flashcardIndex, setFlashcardIndex] = useState(0);
+    const [flashcardCompleted, setFlashcardCompleted] = useState(0);
+    const [flashcardTotal, setFlashcardTotal] = useState(0);
+    const [flashcardKey, setFlashcardKey] = useState(0);
+    // 四等級熟悉度：{[wordId]: 1|2|3|4}  1=完全不會 2=有點印象 3=大概知道 4=完全熟悉
+    const [cardMasteryMap, setCardMasteryMap] = useState({});
 
     // 儲存模型選擇
     const saveApiModel = (model) => {
@@ -77,8 +88,11 @@ const EnglishLearningGame = () => {
     });
     const [grammarForm, setGrammarForm] = useState({
         type: 'choice', question: '', options: ['', '', '', ''], correct: 0,
-        answer: '', hint: '', errorPart: '', words: [], explanation: ''
+        answer: '', hint: '', errorPart: '', words: [], explanation: '', label: ''
     });
+    const [showGrammarLabelPicker, setShowGrammarLabelPicker] = useState(false);
+    const [selectedGrammarLabels, setSelectedGrammarLabels] = useState([]);
+    const [grammarLabelFilter, setGrammarLabelFilter] = useState('all'); // 管理介面篩選
 
     // 使用打亂後的資料進行測驗
     const currentData = shuffledData.length > 0 ? shuffledData : (gameMode === 'vocabulary' ? vocabularyData : grammarData);
@@ -109,11 +123,12 @@ const EnglishLearningGame = () => {
                 utterance.lang = 'en-US';
                 utterance.rate = 0.65; // 小學生聽得懂的速度
                 utterance.pitch = 1.0;
+                utteranceRef.current = utterance;
                 speechSynthesis.speak(utterance);
             }, 800); // 延遲讓反饋畫面先顯示
             return () => clearTimeout(timer);
         }
-    }, [showFeedback]);
+    }, [showFeedback, currentItem, gameMode]);
 
     // 儲存 Google API Key 到 localStorage
     const saveApiKey = () => {
@@ -133,6 +148,23 @@ const EnglishLearningGame = () => {
             localStorage.removeItem('gemini-api-key');
             setApiKey('');
         }
+    };
+
+    // 從 AI 回應文字中強健地擷取 JSON（容錯多種格式）
+    const extractJSON = (text) => {
+        // 1. 先嘗試直接 parse
+        try { return JSON.parse(text.trim()); } catch (_) { /* 繼續嘗試 */ }
+        // 2. 移除 markdown code block 後再試
+        const stripped = text.trim()
+            .replace(/^```json\s*/i, '').replace(/^```\s*/i, '')
+            .replace(/\s*```$/i, '').trim();
+        try { return JSON.parse(stripped); } catch (_) { /* 繼續嘗試 */ }
+        // 3. 用正規表達式找出第一個完整的 JSON 物件（{...}）
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) {
+            try { return JSON.parse(match[0]); } catch (_) { /* 繼續嘗試 */ }
+        }
+        throw new Error('AI 回應格式錯誤，無法解析 JSON');
     };
 
     // 處理圖片上傳（壓縮後準備送 AI）
@@ -164,6 +196,127 @@ const EnglishLearningGame = () => {
         reader.readAsDataURL(file);
     };
 
+    // 處理例句圖片上傳（壓縮後存入 uploadedSentenceImage）
+    const handleSentenceImageUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) { alert('請上傳圖片檔案！'); return; }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                const maxSize = 1600;
+                if (w > maxSize || h > maxSize) {
+                    if (w > h) { h = (h / w) * maxSize; w = maxSize; }
+                    else { w = (w / h) * maxSize; h = maxSize; }
+                }
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                setUploadedSentenceImage(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // 掃描例句圖片，比對現有單字庫並更新 sentence 欄位
+    const processSentenceUpdateWithGemini = async () => {
+        if (!apiKey) { alert('請先設定 Google API Key！'); setImportTab('settings'); return; }
+        if (!uploadedSentenceOnlyImage) { alert('請先上傳例句圖片！'); return; }
+        if (vocabularyData.length === 0) { alert('單字庫目前沒有任何單字！'); return; }
+
+        setIsProcessing(true);
+        setSentenceUpdateResult(null);
+        setErrorMessage('');
+        setProcessingStatus('AI 正在從圖片擷取例句...');
+
+        try {
+            const base64Data = uploadedSentenceOnlyImage.split(',')[1];
+            const wordList = vocabularyData.map(v => v.word).join(', ');
+
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${apiModel}:generateContent?key=${apiKey}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { inlineData: { mimeType: 'image/jpeg', data: base64Data } },
+                                {
+                                    text: `這張圖片是一份英文填空練習題。請仔細閱讀每一個句子（包含手寫填入的單字），還原出完整的英文句子。
+
+以下是目前單字庫中的英文單字清單，請只比對這些單字：
+${wordList}
+
+請找出圖片中每個句子對應的單字（句中的填空答案），並回傳以下 JSON 格式：
+{"pairs":[{"word":"waist","sentence":"My pants are too big at the waist, so I need a belt to hold them up."}]}
+
+規則：
+1. 只比對「單字庫清單」中的單字，不在清單中的單字忽略
+2. 句子要完整（補回填空的答案），不要保留底線
+3. 只回傳純 JSON，不要包含其他文字`
+                                }
+                            ]
+                        }],
+                        generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
+                    })
+                }
+            );
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(`API 請求失敗：${errData.error?.message || `HTTP ${response.status}`}`);
+            }
+
+            setProcessingStatus('正在比對單字庫並更新例句...');
+            const data = await response.json();
+            const textContent = data.candidates?.[0]?.content?.parts
+                ?.filter(p => p.text)?.map(p => p.text)?.join('') || '';
+            if (!textContent) throw new Error('AI 未回傳任何內容');
+
+            let cleanText = textContent.trim()
+                .replace(/^```json\s*/i, '').replace(/^```\s*/i, '')
+                .replace(/\s*```$/i, '').trim();
+
+            const result = extractJSON(cleanText);
+            if (!Array.isArray(result.pairs) || result.pairs.length === 0) {
+                throw new Error('AI 未能從圖片中擷取任何例句');
+            }
+
+            // 比對單字庫，找出有對應的單字
+            const updates = [];
+            const notFound = [];
+            result.pairs.forEach(({ word, sentence }) => {
+                if (!word || !sentence) return;
+                const matched = vocabularyData.find(v => v.word.toLowerCase() === word.toLowerCase());
+                if (matched) {
+                    updates.push({ id: matched.id, word: matched.word, sentence });
+                } else {
+                    notFound.push(word);
+                }
+            });
+
+            if (updates.length === 0) {
+                throw new Error('圖片中的句子沒有符合單字庫中的單字');
+            }
+
+            // 批次更新 Firestore
+            await batchUpdateVocabularySentences(updates);
+            setSentenceUpdateResult({ updated: updates, notFound });
+            setProcessingStatus(`完成！已更新 ${updates.length} 個單字的例句`);
+
+        } catch (error) {
+            console.error('例句更新失敗:', error);
+            setErrorMessage(error.message || '處理失敗，請重試');
+            setProcessingStatus('');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     // 使用 Google Gemini API 識別【單字】圖片（自動生成音標/emoji/例句）
     const processImageWithGemini = async () => {
         if (!apiKey) {
@@ -180,19 +333,35 @@ const EnglishLearningGame = () => {
 
         try {
             const base64Data = uploadedImage.split(',')[1];
-            setProcessingStatus('AI 正在分析單字表...');
+            const hasSentenceImage = !!uploadedSentenceImage;
+            setProcessingStatus(hasSentenceImage ? 'AI 正在分析單字表與例句圖片...' : 'AI 正在分析單字表...');
 
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${apiModel}:generateContent?key=${apiKey}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [
-                                { inlineData: { mimeType: 'image/jpeg', data: base64Data } },
-                                {
-                                    text: `請擔任一位專業的英語教學助教，仔細分析這張圖片中的英文單字表。
+            // 根據是否有例句圖片，組合不同的 parts 與 prompt
+            const parts = [
+                { inlineData: { mimeType: 'image/jpeg', data: base64Data } },
+            ];
+            if (hasSentenceImage) {
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: uploadedSentenceImage.split(',')[1] } });
+            }
+            parts.push({
+                text: hasSentenceImage
+                    ? `請擔任一位專業的英語教學助教，分析以下兩張圖片：
+
+【圖片一】是「英文單字表」，包含英文單字與中文翻譯。請忽略手寫筆跡，只辨識印刷內容。
+【圖片二】是「填空練習題」，每題填入的答案單字出現在句子中。
+
+請辨識圖片一中的所有英文單字，並為每個單字產生：
+1. word: 英文單字（小寫）
+2. chinese: 中文翻譯
+3. pronunciation: KK 音標
+4. emoji: 最能代表這個字「中文意思」的表情符號（🚨非常重要：必須根據中文語境選擇，例如 bear 若翻譯為「忍受/生育」，請不要產生 🐻 這樣的動物圖案）
+5. sentence: 優先使用「圖片二」中包含該單字的完整英文句子（去除填空格後的完整句）；若圖片二中找不到對應句子，才自行生成一個適合小學生的簡單例句
+
+回傳純 JSON 格式（不要用 markdown code block）：
+{"type":"vocabulary","items":[{"word":"apple","chinese":"蘋果","pronunciation":"/ˈæp.əl/","emoji":"🍎","sentence":"I eat an apple every day."}]}
+
+注意：只回傳純 JSON，不要包含其他文字。`
+                    : `請擔任一位專業的英語教學助教，仔細分析這張圖片中的英文單字表。
 
 這張圖片是「單字表」或「課本頁面」，包含英文單字與中文翻譯。
 請忽略圖片上的手寫筆跡（如打勾、圈選、手寫文字），只辨識原始印刷內容。
@@ -207,9 +376,16 @@ const EnglishLearningGame = () => {
 回傳純 JSON 格式（不要用 markdown code block）：
 {"type":"vocabulary","items":[{"word":"apple","chinese":"蘋果","pronunciation":"/ˈæp.əl/","emoji":"🍎","sentence":"I eat an apple every day."}]}
 
-注意：只回傳純 JSON，不要包含其他文字。` }
-                            ]
-                        }],
+注意：只回傳純 JSON，不要包含其他文字。`
+            });
+
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${apiModel}:generateContent?key=${apiKey}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts }],
                         generationConfig: { temperature: 0.2, maxOutputTokens: 8192 }
                     })
                 }
@@ -223,26 +399,39 @@ const EnglishLearningGame = () => {
 
             setProcessingStatus('正在解析 AI 回應...');
             const data = await response.json();
+
+            // 偵錯：記錄完整回應結構
+            console.log('[AI 完整回應]', JSON.stringify(data, null, 2));
+
+            const finishReason = data.candidates?.[0]?.finishReason;
+            if (finishReason && finishReason !== 'STOP') {
+                throw new Error(`AI 拒絕回應（原因：${finishReason}）`);
+            }
+
             const textContent = data.candidates?.[0]?.content?.parts
                 ?.filter(p => p.text)?.map(p => p.text)?.join('') || '';
 
-            if (!textContent) throw new Error('AI 未回傳任何內容');
+            console.log('[AI 文字回應]', textContent);
+
+            if (!textContent) throw new Error('AI 未回傳任何內容（可能為安全過濾或配額問題）');
 
             let cleanText = textContent.trim()
                 .replace(/^```json\s*/i, '').replace(/^```\s*/i, '')
                 .replace(/\s*```$/i, '').trim();
 
-            const result = JSON.parse(cleanText);
-            if (!result.type || !result.items || result.items.length === 0) {
+            const result = extractJSON(cleanText);
+            if (!result.type || !Array.isArray(result.items) || result.items.length === 0) {
                 throw new Error('AI 未能識別任何單字');
             }
+            result.items = result.items.filter(item => item.word && item.chinese);
+            if (result.items.length === 0) throw new Error('AI 回應中沒有有效的單字資料（每筆需有英文單字和中文翻譯）');
 
             setOcrResult(result);
             setProcessingStatus(`識別完成！找到 ${result.items.length} 個單字`);
 
         } catch (error) {
-            console.error('Gemini API 錯誤:', error);
-            let errorMsg = '處理失敗，請重試';
+            console.error('[Gemini 單字識別錯誤]', error);
+            let errorMsg = error.message || '處理失敗，請重試';
             if (error.message.includes('API 請求失敗')) {
                 errorMsg = error.message;
                 if (error.message.includes('429') || error.message.includes('quota')) {
@@ -250,8 +439,6 @@ const EnglishLearningGame = () => {
                 }
             }
             else if (error.message.includes('API_KEY_INVALID') || error.message.includes('API key')) errorMsg = 'API Key 無效，請到「API 設定」檢查後重新設定';
-            else if (error.message.includes('JSON')) errorMsg = 'AI 回應格式錯誤，請重新上傳圖片';
-            else if (error.message.includes('未能識別') || error.message.includes('未回傳')) errorMsg = error.message;
             else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) errorMsg = '網路連線失敗，請檢查網路後重試';
             setErrorMessage(errorMsg);
             setProcessingStatus('');
@@ -292,29 +479,37 @@ const EnglishLearningGame = () => {
 
 重要規則：
 - 請忽略圖片上的手寫筆跡（打勾、圈選、手寫文字），只辨識原始印刷題目。
-- 由你自行分析正確答案，不要參考手寫答案。
+- 由你自行根據英文文法規則判斷正確答案，不要參考手寫答案。
 
-請辨識每一題的題型，並回傳 JSON：
+請辨識每一題並回傳：
 {"type":"grammar","items":[...]}
 
-每一題請根據特徵判斷為以下其中一種題型：
+【標籤規則（label）】
+- 圖片可能分多個段落（如 A. Fill in each blank with much or many）
+- 每題的 label 欄位請填入該題所屬的段落標題（簡化版），例如：
+  "Fill in each blank with much or many" → label: "much/many"
+  "Fill in each blank with some or any" → label: "some/any"
+  "Complete the sentences. Use words from the box" → label: "word box"
+- 若圖片標題有課程名稱（如 Grammar Friends 4 Unit 8），請加上前綴，例如 "GF4 U8 much/many"
+
+【題型格式】
 
 1. 選擇題 (choice)：有 (A)(B)(C)(D) 選項
-格式：{"type":"choice","question":"完整題目(挖空處用 ___ 表示)","options":["A選項","B選項","C選項","D選項"],"correct":正確選項索引(0-3),"explanation":"詳細解析"}
+{"type":"choice","question":"題目(___ 表示空格)","options":["A","B","C","D"],"correct":正確索引(0-3),"label":"標籤","explanation":"繁體中文詳細解析"}
 
-2. 填空題 (fill)：需要填入答案，無選項
-格式：{"type":"fill","question":"題目(___ 表示空格)","answer":"正確答案","hint":"文法提示","explanation":"詳細解析"}
+2. 填空題 (fill)：填入指定範圍的詞（如 much/many 二選一，或從 word box 選詞）
+{"type":"fill","question":"題目(___ 表示空格)","answer":"正確答案","hint":"可選詞用斜線分隔，例如 much / many","label":"標籤","explanation":"繁體中文詳細解析"}
 
-3. 改錯題 (correction)：句子有錯誤需修正
-格式：{"type":"correction","question":"含錯誤的句子","answer":"修正後句子","errorPart":"錯誤部分","explanation":"詳細解析"}
+3. 改錯題 (correction)：
+{"type":"correction","question":"含錯誤的句子","answer":"修正後完整句子","errorPart":"錯誤部分","label":"標籤","explanation":"繁體中文詳細解析"}
 
-4. 重組句 (reorder)：打散單字需排列
-格式：{"type":"reorder","question":"請重組成正確句子","words":["打散","的","單字"],"answer":"正確句子","explanation":"詳細解析"}
+4. 重組句 (reorder)：
+{"type":"reorder","question":"請重組成正確句子","words":["單字1","單字2"],"answer":"正確句子","label":"標籤","explanation":"繁體中文詳細解析"}
 
-explanation 欄位非常重要，請用繁體中文詳細解釋：
-1. 這題考什麼文法觀念
-2. 為什麼正確答案是對的
-3. 其他選項為什麼錯
+【explanation 必須包含】（繁體中文）：
+1. 此題的文法觀念（可數/不可數、肯定/否定/疑問句的用法等）
+2. 正確答案的理由
+3. 其他選項為什麼不對（若有）
 
 只回傳純 JSON，不要用 markdown code block。` }
                             ]
@@ -341,10 +536,12 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                 .replace(/^```json\s*/i, '').replace(/^```\s*/i, '')
                 .replace(/\s*```$/i, '').trim();
 
-            const result = JSON.parse(cleanText);
-            if (!result.type || !result.items || result.items.length === 0) {
+            const result = extractJSON(cleanText);
+            if (!result.type || !Array.isArray(result.items) || result.items.length === 0) {
                 throw new Error('AI 未能識別任何文法題');
             }
+            result.items = result.items.filter(item => item.question);
+            if (result.items.length === 0) throw new Error('AI 回應中沒有有效的文法題資料（每筆需有 question 欄位）');
 
             setOcrResult(result);
             setProcessingStatus(`識別完成！找到 ${result.items.length} 個文法題`);
@@ -441,10 +638,12 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                 .replace(/^```json\s*/i, '').replace(/^```\s*/i, '')
                 .replace(/\s*```$/i, '').trim();
 
-            const result = JSON.parse(cleanText);
-            if (!result.items || result.items.length === 0) {
+            const result = extractJSON(cleanText);
+            if (!Array.isArray(result.items) || result.items.length === 0) {
                 throw new Error('AI 未能識別任何動詞三態');
             }
+            result.items = result.items.filter(item => item.word && item.past && item.participle);
+            if (result.items.length === 0) throw new Error('AI 回應中沒有有效的動詞三態資料（每筆需有 word、past、participle）');
 
             setOcrResult(result);
             setProcessingStatus(`識別完成！找到 ${result.items.length} 組動詞三態`);
@@ -480,8 +679,8 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
             if (currentItem.past && currentItem.participle) {
                 setVocabQuestionType('all_tenses');
             } else if (currentItem.sentence && currentItem.sentence.toLowerCase().includes(currentItem.word.toLowerCase())) {
-                // 有例句且包含該單字時，隨機選擇「中翻英」或「句子填空」
-                setVocabQuestionType(Math.random() < 0.5 ? 'sentence_fill' : 'meaning');
+                // 有例句且包含該單字時，依題號奇偶決定題型（避免每次刷新都隨機變動）
+                setVocabQuestionType(currentQuestion % 2 === 0 ? 'sentence_fill' : 'meaning');
             } else {
                 setVocabQuestionType('meaning');
             }
@@ -574,7 +773,10 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
 
     // 批次匯入 AI/貼上解析的結果到 Firestore
     const addAllOCRItems = async () => {
-        if (!ocrResult || !ocrResult.items) return;
+        if (!ocrResult || !Array.isArray(ocrResult.items) || ocrResult.items.length === 0) {
+            alert('❌ 沒有可匯入的資料，請先進行辨識');
+            return;
+        }
         try {
             if (ocrResult.type === 'vocabulary') {
                 const newItems = ocrResult.items.map(item => ({
@@ -601,7 +803,7 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                 const count = await batchAddGrammar(newItems);
                 alert(`✅ 成功新增 ${count} 個文法題！`);
             }
-            setShowOCRPanel(false); setUploadedImage(null); setOcrResult(null); setImportLabel('');
+            setShowOCRPanel(false); setUploadedImage(null); setUploadedSentenceImage(null); setOcrResult(null); setImportLabel('');
         } catch (error) {
             console.error('匯入失敗:', error);
             alert('❌ 新增失敗，請重試');
@@ -652,7 +854,7 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
             await addGrammarItem(grammarForm);
             setGrammarForm({
                 type: 'choice', question: '', options: ['', '', '', ''], correct: 0,
-                answer: '', hint: '', errorPart: '', words: [], explanation: ''
+                answer: '', hint: '', errorPart: '', words: [], explanation: '', label: ''
             });
         } catch (error) {
             console.error('新增文法題失敗:', error);
@@ -667,7 +869,7 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
             setEditingItem(null);
             setGrammarForm({
                 type: 'choice', question: '', options: ['', '', '', ''], correct: 0,
-                answer: '', hint: '', errorPart: '', words: [], explanation: ''
+                answer: '', hint: '', errorPart: '', words: [], explanation: '', label: ''
             });
         } catch (error) {
             console.error('更新文法題失敗:', error);
@@ -775,6 +977,7 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
         setFlashcardCompleted(0);
         setFlashcardTotal(shuffled.length);
         setFlashcardKey(0);
+        setCardMasteryMap({});
         setGameMode('flashcard');
         setShowLabelPicker(false);
         setSelectedLabels([]);
@@ -785,30 +988,43 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
         setFlashcardFlipped(!flashcardFlipped);
     };
 
-    // 下一張卡片（known: 是否已熟）
-    const nextFlashcard = (known) => {
+    // 下一張卡片（level: 1=完全不會 2=有點印象 3=大概知道 4=完全熟悉）
+    const nextFlashcard = (level) => {
         const current = flashcardQueue[flashcardIndex];
         let newQueue = [...flashcardQueue];
 
-        if (known) {
-            // 已熟：移除此卡片
-            newQueue.splice(flashcardIndex, 1);
+        // 更新此單字的熟悉度紀錄
+        setCardMasteryMap(prev => ({ ...prev, [current.id]: level }));
+
+        // 先從佇列移除當前卡片
+        newQueue.splice(flashcardIndex, 1);
+
+        if (level === 4) {
+            // 完全熟悉：直接移除，完成計數+1
             setFlashcardCompleted(prev => prev + 1);
-            // 如果刪除後佇列為空，練習完成
             if (newQueue.length === 0) {
                 setFlashcardQueue([]);
                 return;
             }
-            // 調整索引（如果刪除的是最後一張，回到第一張）
             const nextIdx = flashcardIndex >= newQueue.length ? 0 : flashcardIndex;
             setFlashcardQueue(newQueue);
             setFlashcardIndex(nextIdx);
         } else {
-            // 不熟：保留在佇列，前進到下一張，並加入錯題本
-            if (!wrongAnswers.find(item => item.word === current.word)) {
-                setWrongAnswers([...wrongAnswers, { ...current, mode: 'vocabulary' }]);
+            // 加入錯題本（level 1 & 2）
+            if (level <= 2) {
+                setWrongAnswers(prev => {
+                    if (prev.find(item => item.id === current.id)) return prev;
+                    return [...prev, { ...current, mode: 'vocabulary' }];
+                });
             }
-            const nextIdx = (flashcardIndex + 1) % newQueue.length;
+
+            // 決定插入位置（相對於移除後的 flashcardIndex）
+            const offsets = { 1: 1, 2: 3, 3: 6 };
+            const insertPos = Math.min(flashcardIndex + offsets[level], newQueue.length);
+            newQueue.splice(insertPos, 0, current);
+
+            const nextIdx = flashcardIndex >= newQueue.length ? 0 : flashcardIndex;
+            setFlashcardQueue(newQueue);
             setFlashcardIndex(nextIdx);
         }
 
@@ -865,11 +1081,16 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
         if (isVocabMode) {
             // 單字模式：根據題型比對原形、過去式或過去分詞
             if (vocabQuestionType === 'all_tenses') {
+                if (!currentItem.past || !currentItem.participle) {
+                    // 資料不完整時，退回比對原形
+                    correct = answer.toLowerCase().trim() === currentItem.word.toLowerCase();
+                } else {
                 const parts = answer.toLowerCase().replace(/,/g, ' ').split(/\s+/).filter(Boolean);
                 correct = parts.length === 3 &&
                     parts[0] === currentItem.word.toLowerCase() &&
                     parts[1] === currentItem.past.toLowerCase() &&
                     parts[2] === currentItem.participle.toLowerCase();
+                }
             } else {
                 // sentence_fill 和 meaning 都比對原形單字
                 const target = vocabQuestionType === 'past' ? currentItem.past :
@@ -885,7 +1106,7 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                     correct = answer === currentItem.correct;
                     break;
                 case 'fill':
-                    correct = answer.toLowerCase().trim() === (currentItem.answer || '').toLowerCase().trim();
+                    correct = answer.toLowerCase().trim().replace(/[.!?]+$/, '') === (currentItem.answer || '').toLowerCase().trim().replace(/[.!?]+$/, '');
                     break;
                 case 'correction':
                     // 比對修正後的句子（忽略大小寫和前後空格）
@@ -908,16 +1129,26 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
             if (streak + 1 >= 3) setStars(stars + 1);
         } else {
             setStreak(0);
-            if (!wrongAnswers.find(item => (item.mode === 'vocabulary' ? item.word === currentItem.word : item.question === currentItem.question))) {
-                setWrongAnswers([...wrongAnswers, { ...currentItem, mode: gameMode === 'review' ? currentItem.mode : gameMode }]);
-            }
+            setWrongAnswers(prev => {
+                if (prev.find(item => item.id === currentItem.id)) return prev;
+                return [...prev, { ...currentItem, mode: gameMode === 'review' ? currentItem.mode : gameMode }];
+            });
         }
 
-        // 更新單字熟度（僅限單字模式）
+        // 更新單字熟度（僅限單字模式），失敗自動重試一次
         if (isVocabMode && currentItem?.id) {
-            updateVocabularyMastery(currentItem.id, correct).catch(err => {
-                console.error('更新熟度失敗:', err);
-            });
+            (async () => {
+                try {
+                    await updateVocabularyMastery(currentItem.id, correct);
+                } catch (err) {
+                    console.warn('更新熟度失敗，重試中...', err);
+                    try {
+                        await updateVocabularyMastery(currentItem.id, correct);
+                    } catch (retryErr) {
+                        console.error('更新熟度重試失敗:', retryErr);
+                    }
+                }
+            })();
         }
 
         // 跳下一題的共用函式
@@ -935,16 +1166,16 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
             (gameMode === 'vocabulary' || (gameMode === 'review' && currentItem?.mode === 'vocabulary'));
 
         if (hasSentence) {
-            // 等語音播完後再延遲 1 秒跳題
-            const checkSpeech = () => {
-                if (!speechSynthesis.speaking) {
-                    setTimeout(goNext, 1000);
+            // 等語音播完後再延遲 1 秒跳題（使用 onend 事件取代輪詢）
+            setTimeout(() => {
+                const utt = utteranceRef.current;
+                if (utt) {
+                    utt.onend = () => setTimeout(goNext, 1000);
                 } else {
-                    setTimeout(checkSpeech, 300); // 每 300ms 檢查一次
+                    // fallback：若 utterance 尚未建立，等候固定時間
+                    setTimeout(goNext, 4000);
                 }
-            };
-            // 至少等 2 秒（讓例句有時間開始播放）
-            setTimeout(checkSpeech, 2000);
+            }, 900); // 稍晚於 utterance 建立的 800ms
         } else {
             // 無例句時（例如文法題）：若答對維持 2.5 秒跳題，答錯則延長時間以便閱讀詳解（文法題 15 秒，單字題 4 秒）
             let delayTime = 2500;
@@ -963,8 +1194,7 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
     // 開始遊戲時打亂題目順序（支援按標籤篩選）
     const startGame = (mode, labels = []) => {
         let data = mode === 'vocabulary' ? vocabularyData : grammarData;
-        // 如果是單字模式且選擇了特定標籤，先篩選
-        if (mode === 'vocabulary' && labels.length > 0) {
+        if (labels.length > 0) {
             data = data.filter(item => labels.includes(item.label));
         }
         if (data.length === 0) {
@@ -1088,6 +1318,55 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                 </div>
             )}
 
+            {/* 文法 Label Picker */}
+            {showGrammarLabelPicker && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-6">
+                    <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-3xl font-black text-gray-800 flex items-center gap-3">
+                                <Tag className="w-8 h-8 text-green-500" /> 選擇文法題範圍
+                            </h2>
+                            <button onClick={() => { setShowGrammarLabelPicker(false); setSelectedGrammarLabels([]); }}
+                                className="bg-gray-400 hover:bg-gray-500 text-white p-2 rounded-xl transition-all">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="space-y-3">
+                            {(() => {
+                                const grammarLabels = [...new Set(grammarData.map(v => v.label).filter(Boolean))];
+                                return (<>
+                                    <button onClick={() => setSelectedGrammarLabels(selectedGrammarLabels.length === grammarLabels.length ? [] : [...grammarLabels])}
+                                        className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 p-4 rounded-2xl font-bold text-base transition-all flex items-center gap-3">
+                                        <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${selectedGrammarLabels.length === grammarLabels.length ? 'bg-green-500 border-green-500' : 'border-gray-400'}`}>
+                                            {selectedGrammarLabels.length === grammarLabels.length && <CheckCircle className="w-4 h-4 text-white" />}
+                                        </div>
+                                        📚 全部文法題（{grammarData.length} 題）
+                                    </button>
+                                    {grammarLabels.map(label => {
+                                        const count = grammarData.filter(g => g.label === label).length;
+                                        const isChecked = selectedGrammarLabels.includes(label);
+                                        return (
+                                            <button key={label} onClick={() => setSelectedGrammarLabels(prev => prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label])}
+                                                className={`w-full p-4 rounded-2xl font-bold text-lg transition-all flex items-center gap-3 ${isChecked ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
+                                                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${isChecked ? 'bg-white border-white' : 'border-gray-400'}`}>
+                                                    {isChecked && <CheckCircle className="w-4 h-4 text-green-600" />}
+                                                </div>
+                                                <span className="flex-1 text-left">🏷️ {label}</span>
+                                                <span className={`text-sm font-bold ${isChecked ? 'text-green-100' : 'text-gray-400'}`}>{count} 題</span>
+                                            </button>
+                                        );
+                                    })}
+                                </>);
+                            })()}
+                        </div>
+                        <button onClick={() => { startGame('grammar', selectedGrammarLabels); setShowGrammarLabelPicker(false); setSelectedGrammarLabels([]); }}
+                            className="w-full mt-6 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white p-5 rounded-2xl font-black text-xl shadow-lg transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
+                            🎯 開始測驗（{selectedGrammarLabels.length === 0 ? grammarData.length : grammarData.filter(g => selectedGrammarLabels.includes(g.label)).length} 題）
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* 智慧匯入面板 */}
             {showOCRPanel && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-6">
@@ -1096,7 +1375,7 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                             <h2 className="text-4xl font-black text-gray-800 flex items-center gap-3">
                                 <Sparkles className="w-10 h-10 text-purple-500" /> 智慧匯入 (v1.5)
                             </h2>
-                            <button onClick={() => { setShowOCRPanel(false); setUploadedImage(null); setOcrResult(null); setErrorMessage(''); setProcessingStatus(''); setPasteText(''); }}
+                            <button onClick={() => { setShowOCRPanel(false); setUploadedImage(null); setUploadedSentenceImage(null); setOcrResult(null); setErrorMessage(''); setProcessingStatus(''); setPasteText(''); }}
                                 className="bg-gray-500 hover:bg-gray-600 text-white p-3 rounded-xl font-black shadow-lg">
                                 <X className="w-6 h-6" />
                             </button>
@@ -1122,6 +1401,11 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                             <button onClick={() => { setImportTab('verb-ai'); setOcrResult(null); setErrorMessage(''); setProcessingStatus(''); }}
                                 className={`flex-1 py-3 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-1 ${importTab === 'verb-ai' ? 'bg-gradient-to-r from-orange-400 to-red-500 text-white shadow-lg' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
                                 <RefreshCcw className="w-4 h-4" /> 動詞AI
+                                {apiKey && <span className="ml-1 w-2 h-2 bg-green-400 rounded-full inline-block"></span>}
+                            </button>
+                            <button onClick={() => { setImportTab('sentence-update'); setOcrResult(null); setErrorMessage(''); setProcessingStatus(''); setSentenceUpdateResult(null); }}
+                                className={`flex-1 py-3 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-1 ${importTab === 'sentence-update' ? 'bg-gradient-to-r from-teal-500 to-green-500 text-white shadow-lg' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
+                                <FileText className="w-4 h-4" /> 更新例句
                                 {apiKey && <span className="ml-1 w-2 h-2 bg-green-400 rounded-full inline-block"></span>}
                             </button>
                             <button onClick={() => { setImportTab('settings'); setOcrResult(null); setErrorMessage(''); setProcessingStatus(''); }}
@@ -1191,8 +1475,39 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                             </div>
                                         ) : (
                                             <div className="space-y-4">
-                                                <div className="bg-gray-100 rounded-2xl p-4">
-                                                    <img src={uploadedImage} alt="上傳的圖片" className="max-h-64 mx-auto rounded-xl shadow-lg" />
+                                                {/* 單字表圖片預覽 */}
+                                                <div className="bg-gray-100 rounded-2xl p-3">
+                                                    <div className="text-xs font-black text-gray-500 mb-2 text-center">📖 單字表圖片</div>
+                                                    <img src={uploadedImage} alt="單字表圖片" className="max-h-48 mx-auto rounded-xl shadow-lg" />
+                                                </div>
+                                                {/* 例句圖片上傳（選填） */}
+                                                <div className={`rounded-2xl border-4 p-4 ${uploadedSentenceImage ? 'border-green-300 bg-green-50' : 'border-dashed border-gray-300 bg-gray-50'}`}>
+                                                    <div className="text-sm font-black text-gray-600 mb-2 flex items-center gap-2">
+                                                        <FileText className="w-4 h-4" />
+                                                        例句練習題圖片
+                                                        <span className="text-xs font-bold text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full">選填</span>
+                                                    </div>
+                                                    {uploadedSentenceImage ? (
+                                                        <div className="flex items-center gap-3">
+                                                            <img src={uploadedSentenceImage} alt="例句圖片" className="h-20 rounded-lg shadow object-cover" />
+                                                            <div className="flex-1">
+                                                                <div className="text-sm font-black text-green-700 mb-1">✅ 已上傳例句圖片</div>
+                                                                <div className="text-xs text-green-600 font-bold mb-2">AI 將優先使用圖片中的真實句子作為例句</div>
+                                                                <button onClick={() => setUploadedSentenceImage(null)}
+                                                                    className="text-xs bg-red-100 hover:bg-red-200 text-red-600 px-3 py-1 rounded-lg font-bold transition-all">
+                                                                    移除
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <label className="flex items-center gap-3 cursor-pointer group">
+                                                            <input type="file" accept="image/*" onChange={handleSentenceImageUpload} className="hidden" />
+                                                            <div className="flex items-center gap-2 bg-white border-2 border-gray-300 group-hover:border-green-400 text-gray-500 group-hover:text-green-600 px-4 py-2 rounded-xl font-bold text-sm transition-all">
+                                                                <Upload className="w-4 h-4" /> 上傳填空練習題圖片
+                                                            </div>
+                                                            <span className="text-xs text-gray-400 font-bold">上傳後 AI 將擷取真實例句</span>
+                                                        </label>
+                                                    )}
                                                 </div>
                                                 {isProcessing && (
                                                     <div className="bg-blue-100 border-4 border-blue-300 rounded-2xl p-6 text-center">
@@ -1204,9 +1519,9 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                                     <div className="flex gap-3">
                                                         <button onClick={processImageWithGemini}
                                                             className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white px-6 py-3 rounded-xl font-black text-lg shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-2">
-                                                            <Sparkles className="w-5 h-5" /> 開始 AI 識別
+                                                            <Sparkles className="w-5 h-5" /> {uploadedSentenceImage ? 'AI 識別（含例句）' : '開始 AI 識別'}
                                                         </button>
-                                                        <button onClick={() => setUploadedImage(null)}
+                                                        <button onClick={() => { setUploadedImage(null); setUploadedSentenceImage(null); }}
                                                             className="bg-gray-400 hover:bg-gray-500 text-white px-4 py-3 rounded-xl font-bold">
                                                             重選
                                                         </button>
@@ -1329,6 +1644,121 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                             </div>
                                         )}
                                     </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* 更新例句區 */}
+                        {importTab === 'sentence-update' && (
+                            <div className="space-y-4">
+                                {!apiKey && (
+                                    <div className="bg-amber-50 border-4 border-amber-300 rounded-2xl p-5 text-center">
+                                        <Key className="w-10 h-10 mx-auto mb-2 text-amber-600" />
+                                        <div className="text-lg font-black text-amber-800 mb-2">需要設定 Google API Key</div>
+                                        <button onClick={() => setImportTab('settings')}
+                                            className="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-xl font-black shadow-lg transform hover:scale-105 transition-all">
+                                            前往設定 API Key
+                                        </button>
+                                    </div>
+                                )}
+                                {apiKey && !sentenceUpdateResult && (
+                                    <>
+                                        <div className="bg-teal-50 border-4 border-teal-200 rounded-2xl p-4">
+                                            <div className="text-base font-black text-teal-800 mb-1">📋 用填空練習題更新例句</div>
+                                            <div className="text-sm text-teal-700 font-bold">上傳填空練習題圖片，AI 將自動擷取句子並更新單字庫中的例句欄位（共 {vocabularyData.length} 個單字）</div>
+                                        </div>
+                                        {!uploadedSentenceOnlyImage ? (
+                                            <div className="bg-gradient-to-r from-teal-100 to-green-100 border-4 border-teal-300 rounded-2xl p-8 text-center">
+                                                <FileText className="w-16 h-16 mx-auto mb-4 text-teal-600" />
+                                                <h3 className="text-xl font-black text-gray-800 mb-2">上傳填空練習題圖片</h3>
+                                                <p className="text-base text-gray-600 font-bold mb-4">如：課本練習題、學習單等有完整例句的圖片</p>
+                                                <label className="inline-block">
+                                                    <input type="file" accept="image/*" onChange={(e) => {
+                                                        const file = e.target.files[0];
+                                                        if (!file) return;
+                                                        const reader = new FileReader();
+                                                        reader.onload = (ev) => {
+                                                            const img = new Image();
+                                                            img.onload = () => {
+                                                                const canvas = document.createElement('canvas');
+                                                                let w = img.width, h = img.height;
+                                                                const maxSize = 1600;
+                                                                if (w > maxSize || h > maxSize) {
+                                                                    if (w > h) { h = (h / w) * maxSize; w = maxSize; }
+                                                                    else { w = (w / h) * maxSize; h = maxSize; }
+                                                                }
+                                                                canvas.width = w; canvas.height = h;
+                                                                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                                                                setUploadedSentenceOnlyImage(canvas.toDataURL('image/jpeg', 0.8));
+                                                            };
+                                                            img.src = ev.target.result;
+                                                        };
+                                                        reader.readAsDataURL(file);
+                                                    }} className="hidden" />
+                                                    <div className="bg-gradient-to-r from-teal-500 to-green-500 text-white px-6 py-3 rounded-2xl font-black text-lg shadow-lg cursor-pointer transform hover:scale-105 transition-all flex items-center gap-2 mx-auto w-fit">
+                                                        <Upload className="w-5 h-5" /> 選擇圖片
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                <div className="bg-gray-100 rounded-2xl p-3">
+                                                    <div className="text-xs font-black text-gray-500 mb-2 text-center">📋 例句圖片</div>
+                                                    <img src={uploadedSentenceOnlyImage} alt="例句圖片" className="max-h-56 mx-auto rounded-xl shadow-lg" />
+                                                </div>
+                                                {isProcessing && (
+                                                    <div className="bg-teal-100 border-4 border-teal-300 rounded-2xl p-6 text-center">
+                                                        <Loader className="w-12 h-12 mx-auto mb-3 text-teal-600 animate-spin" />
+                                                        <div className="text-xl font-black text-gray-800">{processingStatus}</div>
+                                                    </div>
+                                                )}
+                                                {errorMessage && (
+                                                    <div className="bg-red-50 border-4 border-red-300 rounded-2xl p-4 text-center">
+                                                        <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-500" />
+                                                        <div className="text-red-700 font-black">{errorMessage}</div>
+                                                    </div>
+                                                )}
+                                                {!isProcessing && !errorMessage && (
+                                                    <div className="flex gap-3">
+                                                        <button onClick={processSentenceUpdateWithGemini}
+                                                            className="flex-1 bg-gradient-to-r from-teal-500 to-green-500 hover:from-teal-600 hover:to-green-600 text-white px-6 py-3 rounded-xl font-black text-lg shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-2">
+                                                            <Sparkles className="w-5 h-5" /> 開始更新例句
+                                                        </button>
+                                                        <button onClick={() => { setUploadedSentenceOnlyImage(null); setErrorMessage(''); }}
+                                                            className="bg-gray-400 hover:bg-gray-500 text-white px-4 py-3 rounded-xl font-bold">
+                                                            重選
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                                {/* 更新結果 */}
+                                {sentenceUpdateResult && (
+                                    <div className="space-y-4">
+                                        <div className="bg-green-100 border-4 border-green-400 rounded-2xl p-5">
+                                            <div className="text-xl font-black text-green-800 mb-3">✅ 例句更新完成！</div>
+                                            <div className="text-base font-bold text-green-700 mb-4">已更新 {sentenceUpdateResult.updated.length} 個單字的例句</div>
+                                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                                                {sentenceUpdateResult.updated.map(({ word, sentence }) => (
+                                                    <div key={word} className="bg-white rounded-xl p-3 border-2 border-green-200">
+                                                        <div className="font-black text-gray-800">{word}</div>
+                                                        <div className="text-sm text-gray-600 font-bold mt-1">"{sentence}"</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {sentenceUpdateResult.notFound.length > 0 && (
+                                                <div className="mt-3 text-sm text-amber-700 font-bold bg-amber-50 rounded-xl p-3">
+                                                    ⚠️ 以下單字在圖片中未找到對應句子：{sentenceUpdateResult.notFound.join(', ')}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <button onClick={() => { setUploadedSentenceOnlyImage(null); setSentenceUpdateResult(null); setErrorMessage(''); }}
+                                            className="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-xl font-black transition-all">
+                                            再上傳一張
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         )}
@@ -1740,14 +2170,13 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                                 <button onClick={async () => {
                                                     if (batchSelectedIds.length === 0) return;
                                                     try {
-                                                        const { batchUpdateVocabularyLabel } = await import('./firestore');
                                                         await batchUpdateVocabularyLabel(batchSelectedIds, batchLabel);
                                                         alert(`✅ 已將 ${batchSelectedIds.length} 個單字的標籤改為「${batchLabel || '(無標籤)'}」`);
                                                         setBatchSelectedIds([]);
                                                         setBatchLabel('');
                                                     } catch (error) {
                                                         console.error('批次修改標籤失敗:', error);
-                                                        alert('❌ 修改失敗，請重試');
+                                                        alert(`❌ 修改失敗：${error.message}`);
                                                     }
                                                 }} disabled={batchSelectedIds.length === 0}
                                                     className="bg-cyan-500 hover:bg-cyan-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap flex items-center gap-1">
@@ -1756,13 +2185,13 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                                 <button onClick={async () => {
                                                     if (!confirm(`確定要刪除這 ${batchSelectedIds.length} 個單字嗎？`)) return;
                                                     try {
-                                                        for (const id of batchSelectedIds) {
-                                                            await deleteVocabularyItem(id);
-                                                        }
+                                                        const count = batchSelectedIds.length;
+                                                        await batchDeleteVocabulary(batchSelectedIds);
                                                         setBatchSelectedIds([]);
+                                                        alert(`✅ 已刪除 ${count} 個單字`);
                                                     } catch (error) {
                                                         console.error('批次刪除失敗:', error);
-                                                        alert('❌ 刪除失敗，請重試');
+                                                        alert(`❌ 刪除失敗：${error.message}`);
                                                     }
                                                 }} disabled={batchSelectedIds.length === 0}
                                                     className="bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white px-3 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap">
@@ -1881,8 +2310,26 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                             </div>
                                         )}
 
-                                        <div><label className="block text-gray-700 font-bold mb-2">解析建議 *</label>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-gray-700 font-bold mb-2">分類標籤 Label（選填）</label>
+                                                <input type="text" value={grammarForm.label} onChange={(e) => setGrammarForm({ ...grammarForm, label: e.target.value })} placeholder="例如: GF4 U8 much/many"
+                                                    className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 focus:outline-none text-lg font-bold" />
+                                            </div>
+                                            <div>
+                                                {[...new Set(grammarData.map(g => g.label).filter(Boolean))].length > 0 && (
+                                                    <><label className="block text-gray-700 font-bold mb-2">選擇已有標籤</label>
+                                                    <select onChange={(e) => { if (e.target.value) setGrammarForm({ ...grammarForm, label: e.target.value }); }} defaultValue=""
+                                                        className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 focus:outline-none text-lg font-bold bg-white">
+                                                        <option value="" disabled>選擇...</option>
+                                                        {[...new Set(grammarData.map(g => g.label).filter(Boolean))].map(l => <option key={l} value={l}>{l}</option>)}
+                                                    </select></>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div><label className="block text-gray-700 font-bold mb-2">解析 * （答錯時顯示）</label>
                                             <textarea value={grammarForm.explanation} onChange={(e) => setGrammarForm({ ...grammarForm, explanation: e.target.value })} rows={3}
+                                                placeholder="詳細說明文法觀念與正確答案原因，答錯時會顯示給學生"
                                                 className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 focus:outline-none text-lg font-bold" /></div>
                                     </div>
                                     <div className="flex gap-4 mt-4">
@@ -1895,15 +2342,32 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                     </div>
                                 </div>
                                 <div className="bg-white rounded-2xl p-6 border-4 border-gray-200">
-                                    <h3 className="text-2xl font-black text-gray-800 mb-4">📋 文法題列表 ({grammarData.length} 題)</h3>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-2xl font-black text-gray-800">📋 文法題列表 ({grammarData.length} 題)</h3>
+                                        <select value={grammarLabelFilter} onChange={(e) => setGrammarLabelFilter(e.target.value)}
+                                            className="px-3 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white">
+                                            <option value="all">全部</option>
+                                            <option value="">（無標籤）</option>
+                                            {[...new Set(grammarData.map(g => g.label).filter(Boolean))].map(l => <option key={l} value={l}>{l}</option>)}
+                                        </select>
+                                    </div>
                                     <div className="space-y-3 max-h-96 overflow-y-auto">
-                                        {grammarData.map(item => (
+                                        {grammarData.filter(item => grammarLabelFilter === 'all' || item.label === grammarLabelFilter).map(item => (
                                             <div key={item.id} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition-colors">
                                                 <div className="flex items-start justify-between">
-                                                    <div className="flex-1"><div className="text-lg font-black text-gray-800 mb-2">{item.question}</div><div className="text-sm text-gray-600 font-bold">正確答案: {item.options[item.correct]}</div></div>
-                                                    <div className="flex gap-2">
-                                                        <button onClick={() => startEdit(item, 'grammar')} className="bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-lg font-bold transition-all"><Edit className="w-5 h-5" /></button>
-                                                        <button onClick={() => deleteGrammar(item.id)} className="bg-red-500 hover:bg-red-600 text-white p-3 rounded-lg font-bold transition-all"><Trash2 className="w-5 h-5" /></button>
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            {item.label && <span className="text-xs font-black bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{item.label}</span>}
+                                                            <span className="text-xs font-bold bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{item.type === 'choice' ? '選擇' : item.type === 'fill' ? '填空' : item.type === 'correction' ? '改錯' : '重組'}</span>
+                                                        </div>
+                                                        <div className="text-base font-black text-gray-800 mb-1">{item.question}</div>
+                                                        <div className="text-sm text-gray-500 font-bold">
+                                                            正確答案: {item.type === 'choice' ? (item.options || [])[item.correct] : item.answer || ''}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2 ml-2">
+                                                        <button onClick={() => startEdit(item, 'grammar')} className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg font-bold transition-all"><Edit className="w-4 h-4" /></button>
+                                                        <button onClick={() => deleteGrammar(item.id)} className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg font-bold transition-all"><Trash2 className="w-4 h-4" /></button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1942,7 +2406,11 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
 
                             {/* 文法射擊 */}
                             <div className="relative">
-                                <button onClick={() => startGame('grammar')}
+                                <button onClick={() => {
+                                    const labels = [...new Set(grammarData.map(v => v.label).filter(Boolean))];
+                                    if (labels.length > 0) { setShowGrammarLabelPicker(true); setSelectedGrammarLabels([]); }
+                                    else startGame('grammar');
+                                }}
                                     className="group w-full bg-gradient-to-br from-green-400 to-emerald-600 hover:from-green-300 hover:to-emerald-500 p-6 md:p-8 rounded-3xl shadow-2xl transform hover:scale-105 hover:rotate-1 transition-all duration-300">
                                     <div className="text-6xl md:text-7xl mb-2 md:mb-4 group-hover:animate-bounce">🎯</div>
                                     <div className="text-white text-2xl md:text-3xl font-black mb-1 md:mb-2">文法射擊</div>
@@ -2083,17 +2551,30 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
 
                         {/* 填空題 */}
                         {currentItem.type === 'fill' && (<>
-                            <div className="text-center mb-6 md:mb-8">
+                            <div className="text-center mb-4 md:mb-6">
                                 <div className="text-2xl md:text-4xl font-black text-gray-800 mb-4 leading-tight">{currentItem.question}</div>
-                                {currentItem.hint && (
-                                    <div className="text-base md:text-lg text-blue-600 font-bold bg-blue-50 inline-block px-4 py-2 rounded-xl">
-                                        💡 提示：{currentItem.hint}
-                                    </div>
-                                )}
+                                {currentItem.hint && (() => {
+                                    const hintWords = currentItem.hint.split(/\s*[\/|,]\s*/).map(w => w.trim()).filter(Boolean);
+                                    return hintWords.length > 1 ? (
+                                        <div className="flex flex-wrap gap-2 justify-center">
+                                            <span className="text-sm text-gray-500 font-bold w-full mb-1">選擇答案：</span>
+                                            {hintWords.map(w => (
+                                                <button key={w} onClick={() => setUserAnswer(w)}
+                                                    className={`px-5 py-2 rounded-xl font-black text-lg border-4 transition-all transform hover:scale-105 ${userAnswer === w ? 'bg-green-500 text-white border-green-500 shadow-lg' : 'bg-white text-gray-700 border-gray-300 hover:border-green-400'}`}>
+                                                    {w}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-base md:text-lg text-blue-600 font-bold bg-blue-50 inline-block px-4 py-2 rounded-xl">
+                                            💡 提示：{currentItem.hint}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                             <input type="text" value={userAnswer} onChange={(e) => setUserAnswer(e.target.value)}
                                 onKeyPress={(e) => e.key === 'Enter' && userAnswer && handleAnswer(userAnswer)}
-                                placeholder="輸入答案..."
+                                placeholder="輸入或點選答案..."
                                 className="w-full px-4 py-4 md:px-8 md:py-6 text-xl md:text-3xl font-bold border-4 border-green-300 rounded-2xl focus:outline-none focus:border-green-500 text-center mb-4 md:mb-6" autoFocus />
                             <button onClick={() => userAnswer && handleAnswer(userAnswer)} disabled={!userAnswer}
                                 className="w-full bg-gradient-to-r from-green-500 to-emerald-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-4 md:px-8 md:py-6 rounded-2xl font-black text-xl md:text-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3">
@@ -2141,14 +2622,14 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                             </div>
                             {/* 可選的單字 */}
                             <div className="flex flex-wrap gap-2 md:gap-3 justify-center mb-4 md:mb-6">
-                                {(currentItem.words || []).filter(w => {
+                                {(() => {
                                     const remaining = [...(currentItem.words || [])];
                                     reorderWords.forEach(selected => {
                                         const idx = remaining.indexOf(selected);
                                         if (idx !== -1) remaining.splice(idx, 1);
                                     });
-                                    return remaining.includes(w);
-                                }).map((word, index) => (
+                                    return remaining;
+                                })().map((word, index) => (
                                     <button key={index} onClick={() => setReorderWords([...reorderWords, word])}
                                         className="bg-white border-4 border-purple-300 text-purple-700 px-4 py-2 md:px-5 md:py-3 rounded-xl font-black text-lg md:text-xl shadow hover:bg-purple-100 transform hover:scale-105 transition-all">
                                         {word}
@@ -2291,17 +2772,36 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                             <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-12 text-center">
                                 <div className="text-8xl md:text-9xl mb-6 animate-bounce-slow">🎉</div>
                                 <div className="text-4xl md:text-5xl font-black text-green-600 mb-4">太棒了！全部完成！</div>
-                                <div className="text-xl md:text-2xl text-gray-600 font-bold mb-2">你已經熟悉了所有 {flashcardTotal} 個單字</div>
-                                <div className="flex items-center justify-center gap-3 mt-6">
-                                    <div className="bg-green-100 border-2 border-green-300 px-6 py-3 rounded-2xl">
-                                        <div className="text-sm font-bold text-green-600">已熟練</div>
-                                        <div className="text-3xl font-black text-green-700">{flashcardTotal}</div>
-                                    </div>
+                                <div className="text-xl md:text-2xl text-gray-600 font-bold mb-2">共練習 {flashcardTotal} 個單字</div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+                                    {[
+                                        { level: 1, label: '完全不會', emoji: '😵', bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700' },
+                                        { level: 2, label: '有點印象', emoji: '🤔', bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700' },
+                                        { level: 3, label: '大概知道', emoji: '😊', bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700' },
+                                        { level: 4, label: '完全熟悉', emoji: '🎉', bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700' },
+                                    ].map(({ level, label, emoji, bg, border, text }) => {
+                                        const count = level === 4 ? flashcardCompleted : Object.values(cardMasteryMap).filter(v => v === level).length;
+                                        return (
+                                            <div key={level} className={`${bg} border-2 ${border} px-4 py-3 rounded-2xl`}>
+                                                <div className="text-2xl mb-1">{emoji}</div>
+                                                <div className={`text-xs font-bold ${text}`}>{label}</div>
+                                                <div className={`text-3xl font-black ${text}`}>{count}</div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                                <button onClick={() => { setGameMode('menu'); }}
-                                    className="mt-8 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-2xl font-black text-xl shadow-lg transform hover:scale-105 transition-all">
-                                    🏠 返回主選單
-                                </button>
+                                <div className="flex gap-3 justify-center mt-8">
+                                    <button onClick={() => { setGameMode('menu'); }}
+                                        className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-2xl font-black text-xl shadow-lg transform hover:scale-105 transition-all">
+                                        🏠 返回主選單
+                                    </button>
+                                    {wrongAnswers.length > 0 && (
+                                        <button onClick={() => setGameMode('review')}
+                                            className="bg-gradient-to-r from-red-500 to-pink-600 text-white px-8 py-4 rounded-2xl font-black text-xl shadow-lg transform hover:scale-105 transition-all">
+                                            📝 練習錯題 ({wrongAnswers.length})
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         ) : (
                             /* 翻牌卡片 */
@@ -2310,14 +2810,22 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                 <div className="mb-6">
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="text-white font-bold text-base md:text-lg">📊 進度</span>
-                                        <span className="text-white font-bold text-base md:text-lg">{flashcardCompleted} / {flashcardTotal} 已熟</span>
+                                        <span className="text-white font-bold text-base md:text-lg">{flashcardCompleted} / {flashcardTotal} 完全熟悉</span>
                                     </div>
                                     <div className="w-full bg-white bg-opacity-20 rounded-full h-3">
-                                        <div className="bg-gradient-to-r from-amber-400 to-yellow-500 rounded-full h-3 transition-all duration-500"
+                                        <div className="bg-gradient-to-r from-green-400 to-emerald-500 rounded-full h-3 transition-all duration-500"
                                             style={{ width: `${(flashcardCompleted / flashcardTotal) * 100}%` }}></div>
                                     </div>
-                                    <div className="text-white text-sm font-bold mt-1 text-center opacity-70">
-                                        剩餘 {flashcardQueue.length} 張卡片
+                                    <div className="flex justify-center gap-3 mt-2">
+                                        {[
+                                            { level: 1, label: '完全不會', color: 'text-red-300', count: Object.values(cardMasteryMap).filter(v => v === 1).length },
+                                            { level: 2, label: '有點印象', color: 'text-orange-300', count: Object.values(cardMasteryMap).filter(v => v === 2).length },
+                                            { level: 3, label: '大概知道', color: 'text-yellow-300', count: Object.values(cardMasteryMap).filter(v => v === 3).length },
+                                            { level: 4, label: '完全熟悉', color: 'text-green-300', count: flashcardCompleted },
+                                        ].map(({ level, label, color, count }) => count > 0 && (
+                                            <span key={level} className={`text-xs font-bold ${color} opacity-80`}>{label} {count}</span>
+                                        ))}
+                                        <span className="text-white text-xs font-bold opacity-60">剩餘 {flashcardQueue.length} 張</span>
                                     </div>
                                 </div>
 
@@ -2407,16 +2915,24 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                     </button>
 
                                     {flashcardFlipped && (
-                                        <>
-                                            <button onClick={() => nextFlashcard(false)}
-                                                className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white px-5 py-3 md:px-7 md:py-4 rounded-2xl font-black text-lg md:text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-2">
-                                                ❌ 不熟
+                                        <div className="flex flex-wrap justify-center gap-2">
+                                            <button onClick={() => nextFlashcard(1)}
+                                                className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white px-3 py-3 md:px-5 md:py-4 rounded-2xl font-black text-sm md:text-base shadow-lg transform hover:scale-105 transition-all">
+                                                😵 完全不會
                                             </button>
-                                            <button onClick={() => nextFlashcard(true)}
-                                                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-5 py-3 md:px-7 md:py-4 rounded-2xl font-black text-lg md:text-xl shadow-lg transform hover:scale-105 transition-all flex items-center gap-2">
-                                                ✅ 已熟
+                                            <button onClick={() => nextFlashcard(2)}
+                                                className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white px-3 py-3 md:px-5 md:py-4 rounded-2xl font-black text-sm md:text-base shadow-lg transform hover:scale-105 transition-all">
+                                                🤔 有點印象
                                             </button>
-                                        </>
+                                            <button onClick={() => nextFlashcard(3)}
+                                                className="bg-gradient-to-r from-yellow-400 to-lime-500 hover:from-yellow-500 hover:to-lime-600 text-white px-3 py-3 md:px-5 md:py-4 rounded-2xl font-black text-sm md:text-base shadow-lg transform hover:scale-105 transition-all">
+                                                😊 大概知道
+                                            </button>
+                                            <button onClick={() => nextFlashcard(4)}
+                                                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-3 py-3 md:px-5 md:py-4 rounded-2xl font-black text-sm md:text-base shadow-lg transform hover:scale-105 transition-all">
+                                                🎉 完全熟悉
+                                            </button>
+                                        </div>
                                     )}
 
                                     {!flashcardFlipped && (
@@ -2462,6 +2978,16 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                             className="bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white px-5 py-2 rounded-xl font-bold text-sm md:text-base shadow transform hover:scale-105 transition-all flex items-center gap-2 mx-auto">
                                             <Volume2 className="w-4 h-4 md:w-5 md:h-5" /> 🔊 再聽一次
                                         </button>
+                                    </div>
+                                )}
+                                {/* 文法題答對也顯示解析 */}
+                                {!(gameMode === 'vocabulary' || (currentItem && currentItem.mode === 'vocabulary')) && currentItem?.explanation && (
+                                    <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 md:p-5 text-left mt-2">
+                                        <div className="text-base md:text-lg font-black text-green-800 mb-2 flex items-center gap-2">
+                                            📖 文法解析
+                                            {currentItem.label && <span className="text-xs font-bold bg-green-200 text-green-800 px-2 py-0.5 rounded-full">{currentItem.label}</span>}
+                                        </div>
+                                        <div className="text-sm md:text-base text-gray-700 font-bold leading-relaxed whitespace-pre-line">{currentItem.explanation}</div>
                                     </div>
                                 )}
                                 {streak >= 3 && (
@@ -2518,19 +3044,24 @@ explanation 欄位非常重要，請用繁體中文詳細解釋：
                                         )}
                                     </div>
                                 ) : (<>
-                                    <div className="bg-blue-50 rounded-2xl p-4 md:p-8 mb-4 md:mb-6">
-                                        <div className="text-xl md:text-3xl font-black text-gray-800 mb-2 md:mb-3">正確答案：</div>
+                                    <div className="bg-blue-50 rounded-2xl p-4 md:p-6 mb-4">
+                                        <div className="text-lg md:text-2xl font-black text-gray-800 mb-2">✅ 正確答案：</div>
                                         <div className="text-2xl md:text-4xl font-black text-blue-600">
                                             {(currentItem.type === 'choice' || currentItem.type === 'multiple' || !currentItem.type)
                                                 ? (currentItem.options || [])[currentItem.correct]
                                                 : currentItem.answer || ''}
                                         </div>
                                     </div>
-                                    {currentItem.explanation && (
-                                        <div className="bg-yellow-50 border-4 border-yellow-300 rounded-2xl p-4 md:p-6">
-                                            <div className="text-xl md:text-2xl font-black text-yellow-800 mb-2 md:mb-3">💡 詳細解析：</div>
-                                            <div className="text-base md:text-xl text-gray-700 font-bold leading-relaxed whitespace-pre-line text-left">{currentItem.explanation}</div>
+                                    {currentItem.explanation ? (
+                                        <div className="bg-amber-50 border-4 border-amber-400 rounded-2xl p-4 md:p-6 text-left">
+                                            <div className="text-lg md:text-xl font-black text-amber-800 mb-3 flex items-center gap-2">
+                                                📖 文法解析
+                                                {currentItem.label && <span className="text-xs font-bold bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full">{currentItem.label}</span>}
+                                            </div>
+                                            <div className="text-base md:text-lg text-gray-800 font-bold leading-relaxed whitespace-pre-line">{currentItem.explanation}</div>
                                         </div>
+                                    ) : (
+                                        <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-gray-400 font-bold text-center">此題尚未設定解析</div>
                                     )}
                                 </>)}
                                 <div className="mt-4 md:mt-6 text-lg md:text-xl text-orange-600 font-black">已加入錯題本 📖</div>

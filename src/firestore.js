@@ -90,6 +90,7 @@ export const deleteVocabularyItem = async (docId) => {
  * @returns {Promise<number>} 新增的數量
  */
 export const batchAddVocabulary = async (items) => {
+    if (items.length > 500) throw new Error(`批次操作超過 Firestore 限制（${items.length} 筆 > 500 筆），請分批匯入`);
     const batch = writeBatch(db);
     items.forEach(item => {
         const newDocRef = doc(vocabularyRef);
@@ -159,6 +160,7 @@ export const addGrammarItem = async (item) => {
         type: item.type || 'choice',
         question: item.question || '',
         explanation: item.explanation || '',
+        label: item.label || '',
         createdAt: serverTimestamp()
     };
     // 題型專屬欄位
@@ -198,6 +200,7 @@ export const deleteGrammarItem = async (docId) => {
  * @returns {Promise<number>} 新增的數量
  */
 export const batchAddGrammar = async (items) => {
+    if (items.length > 500) throw new Error(`批次操作超過 Firestore 限制（${items.length} 筆 > 500 筆），請分批匯入`);
     const batch = writeBatch(db);
     items.forEach(item => {
         const newDocRef = doc(grammarRef);
@@ -205,6 +208,7 @@ export const batchAddGrammar = async (items) => {
             type: item.type || 'choice',
             question: item.question || '',
             explanation: item.explanation || '',
+            label: item.label || '',
             createdAt: serverTimestamp()
         };
         if (item.options) data.options = item.options;
@@ -217,6 +221,36 @@ export const batchAddGrammar = async (items) => {
     });
     await batch.commit();
     return items.length;
+};
+
+/**
+ * 批次更新單字的例句（從 OCR 例句圖片取得真實句子後呼叫）
+ * @param {Array<{id: string, sentence: string}>} updates - 要更新的項目陣列
+ * @returns {Promise<number>} 更新筆數
+ */
+export const batchUpdateVocabularySentences = async (updates) => {
+    if (updates.length > 500) throw new Error(`批次操作超過 Firestore 限制（${updates.length} 筆 > 500 筆）`);
+    const batch = writeBatch(db);
+    updates.forEach(({ id, sentence }) => {
+        const docRef = doc(db, 'vocabulary', id);
+        batch.update(docRef, { sentence });
+    });
+    await batch.commit();
+    return updates.length;
+};
+
+/**
+ * 批次刪除單字（使用 writeBatch 確保原子性）
+ * @param {Array<string>} docIds - 要刪除的文件 ID 陣列
+ */
+export const batchDeleteVocabulary = async (docIds) => {
+    if (docIds.length > 500) throw new Error(`批次操作超過 Firestore 限制（${docIds.length} 筆 > 500 筆）`);
+    const batch = writeBatch(db);
+    docIds.forEach(docId => {
+        const docRef = doc(db, 'vocabulary', docId);
+        batch.delete(docRef);
+    });
+    await batch.commit();
 };
 
 /**

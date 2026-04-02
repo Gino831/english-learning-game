@@ -9,7 +9,7 @@ window.storage = {
         try {
             const value = localStorage.getItem(STORAGE_PREFIX + key);
             if (value !== null) {
-                return { value };
+                return { value: JSON.parse(value) };
             }
             return null;
         } catch (err) {
@@ -21,7 +21,7 @@ window.storage = {
     // 寫入資料
     set: async (key, value) => {
         try {
-            localStorage.setItem(STORAGE_PREFIX + key, value);
+            localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
             return true;
         } catch (err) {
             console.warn('寫入 localStorage 失敗:', err);

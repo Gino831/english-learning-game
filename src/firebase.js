@@ -3,14 +3,14 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
-// Firebase 專案設定（公開資訊，安全性由 Firestore Rules 控制）
+// Firebase 專案設定（從環境變數載入，請勿直接硬寫金鑰）
 const firebaseConfig = {
-    apiKey: "AIzaSyB_aHrLozuEz7o4z7K5p9UJzBz1iFqojOU",
-    authDomain: "english-learning-game-97be2.firebaseapp.com",
-    projectId: "english-learning-game-97be2",
-    storageBucket: "english-learning-game-97be2.firebasestorage.app",
-    messagingSenderId: "256242972896",
-    appId: "1:256242972896:web:0fa5d687e68b3b5f513885"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // 初始化 Firebase
